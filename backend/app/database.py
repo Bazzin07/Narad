@@ -29,6 +29,7 @@ class Base(DeclarativeBase):
 async def init_db():
     """Create all tables (dev convenience — use Alembic in prod)."""
     from app.models.article import Base as ModelBase  # noqa: F811
+    from sqlalchemy import text
     async with engine.begin() as conn:
         # Enable pgvector extension (requires PostgreSQL with vector extension installed)
         try:
@@ -39,7 +40,6 @@ async def init_db():
         await conn.run_sync(ModelBase.metadata.create_all)
 
         # Ensure new columns exist on existing databases (migrations)
-        from sqlalchemy import text
         try:
             await conn.execute(text(
                 "ALTER TABLE articles ADD COLUMN IF NOT EXISTS geographic_scope VARCHAR(10) DEFAULT 'global'"

@@ -5,7 +5,7 @@ FastAPI application entry point.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -149,11 +149,59 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://main.dlf5o2e741xry.amplifyapp.com",
+        "https://*.amplifyapp.com",
+        "https://*.awsapprunner.com",
+        "https://*.narad.ai",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+import time
+from collections import defaultdict
+from fastapi.responses import JSONResponse
+
+# Simple in-memory rate limiter: 100 requests / 60 seconds per IP
+_ip_requests = defaultdict(list)
+RATE_LIMIT = 100
+RATE_WINDOW = 60
+
+@app.middleware("http")
+async def security_and_rate_limit_middleware(request: Request, call_next):
+    # 1. Rate Limiting
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    
+    # Clean up old timestamps
+    _ip_requests[client_ip] = [t for t in _ip_requests[client_ip] if now - t < RATE_WINDOW]
+    
+    if len(_ip_requests[client_ip]) >= RATE_LIMIT:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please slow down."},
+            headers={"Retry-After": str(RATE_WINDOW)}
+        )
+    
+    _ip_requests[client_ip].append(now)
+    
+    # 2. Process Request
+    response = await call_next(request)
+    
+    # 3. Security Headers (Defend against cyber attacks: XSS, Clickjacking, MIME sniffing)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # Basic CSP - restrict things to same origin mostly
+    response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:;"
+    
+    return response
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
