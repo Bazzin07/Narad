@@ -865,86 +865,87 @@ async def ask_narad(
       5. Return answer + source citations
     Cached 20 min per (question, state).
     """
-    from app.main import orchestrator
-    from app.services.llm_cache import llm_cache
-    from app.services.page_index_rag import PageIndex, build_rag_context, question_cache_key
+    try:
+        from app.main import orchestrator
+        from app.services.llm_cache import llm_cache
+        from app.services.page_index_rag import PageIndex, build_rag_context, question_cache_key
 
-    question = body.question.strip()
-    if not question:
-        raise HTTPException(status_code=400, detail="Question cannot be empty")
+        question = body.question.strip()
+        if not question:
+            raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    # Cache check
-    cache_key = llm_cache.make_key("ask_narad", question_cache_key(question), body.state or "all")
-    cached = llm_cache.get(cache_key)
-    if cached:
-        import json as _json
-        return _json.loads(cached)
+        # Cache check
+        cache_key = llm_cache.make_key("ask_narad", question_cache_key(question), body.state or "all")
+        cached = llm_cache.get(cache_key)
+        if cached:
+            import json as _json
+            return _json.loads(cached)
 
-    # Step 1: FAISS similarity search on the question
-    emb_svc = orchestrator.embedding
-    q_embedding = emb_svc.generate_embedding(question)
-    similar = emb_svc.find_similar(q_embedding, k=20)
+        # Step 1: FAISS similarity search on the question
+        emb_svc = orchestrator.embedding
+        q_embedding = emb_svc.generate_embedding(question)
+        similar = emb_svc.find_similar(q_embedding, k=20)
 
-    candidate_ids = [aid for aid, _ in similar if _ > 0.2][:20]
+        candidate_ids = [aid for aid, _ in similar if _ > 0.2][:20]
 
-    # Filter by state if provided
-    q = select(Article).where(Article.id.in_(candidate_ids)) if candidate_ids else select(Article).limit(10)
-    if body.state:
-        q = q.where(Article.state == body.state)
-    result = await db.execute(q)
-    articles = result.scalars().all()
-
-    # Fallback: if no results via FAISS, just get recent articles
-    if not articles:
-        fallback_q = select(Article).order_by(Article.published_at.desc()).limit(15)
+        # Filter by state if provided
+        q = select(Article).where(Article.id.in_(candidate_ids)) if candidate_ids else select(Article).limit(10)
         if body.state:
-            fallback_q = fallback_q.where(Article.state == body.state)
-        articles = (await db.execute(fallback_q)).scalars().all()
+            q = q.where(Article.state == body.state)
+        result = await db.execute(q)
+        articles = result.scalars().all()
 
-    if not articles:
-        return {"answer": "No relevant articles found for your question.", "sources": [], "source": "no_data"}
+        # Fallback: if no results via FAISS, just get recent articles
+        if not articles:
+            fallback_q = select(Article).order_by(Article.published_at.desc()).limit(15)
+            if body.state:
+                fallback_q = fallback_q.where(Article.state == body.state)
+            articles = (await db.execute(fallback_q)).scalars().all()
 
-    # Convert to dicts
-    art_dicts = [
-        {
-            "id": a.id, "title": a.title, "source": a.source,
-            "content": a.content or "", "url": a.url,
-            "published_at": str(a.published_at), "topic": a.topic,
-        }
-        for a in articles
-    ]
+        if not articles:
+            return {"answer": "No relevant articles found for your question.", "sources": [], "source": "no_data"}
 
-    # Step 2–3: Page-index RAG
-    page_idx = PageIndex(emb_svc)
-    page_idx.build(art_dicts)
-    top_pages = page_idx.query(question)
+        # Convert to dicts
+        art_dicts = [
+            {
+                "id": a.id, "title": a.title, "source": a.source,
+                "content": a.content or "", "url": a.url,
+                "published_at": str(a.published_at), "topic": a.topic,
+            }
+            for a in articles
+        ]
 
-    # Step 4: Assemble RAG context
-    context = build_rag_context(top_pages)
+        # Step 2–3: Page-index RAG
+        page_idx = PageIndex(emb_svc)
+        page_idx.build(art_dicts)
+        top_pages = page_idx.query(question)
 
-    # Build citations (unique articles from top pages)
-    seen_ids: set = set()
-    sources = []
-    for p in top_pages:
-        if p["article_id"] not in seen_ids:
-            seen_ids.add(p["article_id"])
-            sources.append({
-                "id": p["article_id"],
-                "title": p["title"],
-                "source": p["source"],
-                "url": p["url"],
-                "published_at": p["published_at"],
-                "relevance_score": p.get("relevance_score", 0),
-            })
+        # Step 4: Assemble RAG context
+        context = build_rag_context(top_pages)
 
-    # Step 5: LLM answer  (Llama 3.3 70B — multilingual Indian language aware)
-    # Detect question language hint for multilingual response
-    lang_instruction = (
-        "IMPORTANT: Detect the language of the question and respond in the SAME language. "
-        "Supported: English, Hindi (हिंदी), Bengali (বাংলা), Tamil (தமிழ்), Telugu (తెలుగు), "
-        "Marathi (मराठी), Gujarati (ગુજરાતી), Kannada (ಕನ್ನಡ), Malayalam (മലയാളം), Punjabi (ਪੰਜਾਬੀ)."
-    )
-    prompt = f"""You are Narad, an India intelligence analyst. Answer the question using ONLY the news context provided.
+        # Build citations (unique articles from top pages)
+        seen_ids: set = set()
+        sources = []
+        for p in top_pages:
+            if p["article_id"] not in seen_ids:
+                seen_ids.add(p["article_id"])
+                sources.append({
+                    "id": p["article_id"],
+                    "title": p["title"],
+                    "source": p["source"],
+                    "url": p["url"],
+                    "published_at": p["published_at"],
+                    "relevance_score": p.get("relevance_score", 0),
+                })
+
+        # Step 5: LLM answer  (Llama 3.3 70B — multilingual Indian language aware)
+        # Detect question language hint for multilingual response
+        lang_instruction = (
+            "IMPORTANT: Detect the language of the question and respond in the SAME language. "
+            "Supported: English, Hindi (हिंदी), Bengali (বাংলা), Tamil (தமிழ்), Telugu (తెలుగు), "
+            "Marathi (मराठी), Gujarati (ગુજરાતી), Kannada (ಕನ್ನಡ), Malayalam (മലയാളം), Punjabi (ਪੰਜਾਬੀ)."
+        )
+        prompt = f"""You are Narad, an India intelligence analyst. Answer the question using ONLY the news context provided.
 If the context does not contain enough information, say so clearly. Cite sources as [Source Name].
 {lang_instruction}
 
@@ -958,41 +959,53 @@ If the context does not contain enough information, say so clearly. Cite sources
 Provide a clear, concise answer (150-250 words). Cite sources inline. End with a "Key Sources:" bullet list.
 INSTRUCTIONS: DO NOT use any emojis. DO NOT use markdown bolding like **text**. Output standard plain text."""
 
-    llm = getattr(orchestrator, "llm", None)
-    answer = None
+        llm = getattr(orchestrator, "llm", None)
+        answer = None
 
-    if llm and hasattr(llm, "_invoke_llama"):
-        try:
-            answer = await llm._invoke_llama(prompt, max_tokens=600)
-        except Exception as e:
-            logger.warning(f"Ask Narad Llama 3.3 70B failed: {e}")
-    elif llm and hasattr(llm, "_invoke_fast"):
-        try:
-            answer = await llm._invoke_fast(prompt)
-        except Exception as e:
-            logger.warning(f"Ask Narad fast fallback failed: {e}")
+        if llm and hasattr(llm, "_invoke_llama"):
+            try:
+                answer = await llm._invoke_llama(prompt, max_tokens=600)
+            except Exception as e:
+                logger.warning(f"Ask Narad Llama 3.3 70B failed: {e}")
+        elif llm and hasattr(llm, "_invoke_fast"):
+            try:
+                answer = await llm._invoke_fast(prompt)
+            except Exception as e:
+                logger.warning(f"Ask Narad fast fallback failed: {e}")
 
-    # Nova Pro fallback
-    if not answer and llm and hasattr(llm, "_invoke_nova"):
-        try:
-            answer = await llm._invoke_nova(prompt, max_tokens=600)
-        except Exception as e:
-            logger.warning(f"Ask Narad Nova Pro fallback failed: {e}")
+        # Nova Pro fallback
+        if not answer and llm and hasattr(llm, "_invoke_nova"):
+            try:
+                answer = await llm._invoke_nova(prompt, max_tokens=600)
+            except Exception as e:
+                logger.warning(f"Ask Narad Nova Pro fallback failed: {e}")
 
-    # Final fallback: deterministic
-    if not answer:
-        bullets = "\n".join(f"- [{s['source']}] {s['title']}" for s in sources[:5])
-        answer = f"Here are the most relevant articles about your question:\n\n{bullets}"
+        # Final fallback: deterministic
+        if not answer:
+            bullets = "\n".join(f"- [{s['source']}] {s['title']}" for s in sources[:5])
+            answer = f"Here are the most relevant articles about your question:\n\n{bullets}"
 
-    response = {
-        "answer": answer,
-        "sources": sources[:5],
-        "pages_retrieved": len(top_pages),
-        "articles_scanned": len(art_dicts),
-        "source": "rag",
-    }
+        response = {
+            "answer": answer,
+            "sources": sources[:5],
+            "pages_retrieved": len(top_pages),
+            "articles_scanned": len(art_dicts),
+            "source": "rag",
+        }
 
-    import json as _json
-    llm_cache.set(cache_key, _json.dumps(response), ttl=1200)
-    return response
+        import json as _json
+        llm_cache.set(cache_key, _json.dumps(response), ttl=1200)
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ask Narad failed: {e}", exc_info=True)
+        return {
+            "answer": "Sorry, I encountered an error processing your question. Please try again.",
+            "sources": [],
+            "pages_retrieved": 0,
+            "articles_scanned": 0,
+            "source": "error",
+        }
 

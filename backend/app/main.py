@@ -146,17 +146,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS — Starlette CORSMiddleware supports wildcard subdomains via
+# "https://*.example.com" patterns (the allow_origin_regex param is NOT
+# needed for this form).  However, for maximum reliability with AWS
+# services where the subdomain is dynamic, we also set allow_origin_regex
+# as a safety net.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
         "https://main.dlf5o2e741xry.amplifyapp.com",
-        "https://*.amplifyapp.com",
-        "https://*.awsapprunner.com",
-        "https://*.narad.ai",
     ],
+    allow_origin_regex=r"https://.*\.(amplifyapp\.com|awsapprunner\.com|narad\.ai)",
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],

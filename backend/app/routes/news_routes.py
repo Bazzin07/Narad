@@ -41,22 +41,37 @@ async def get_article(
     return detail
 
 
-@router.post("/ingest", response_model=IngestResponse)
+from fastapi import BackgroundTasks
+
+async def run_ingestion_background():
+    """Run the ingestion pipeline in the background using a fresh database session."""
+    from app.main import orchestrator
+    from app.database import async_session
+    
+    try:
+        async with async_session() as db:
+            logger.info("Starting manual background ingestion...")
+            result = await orchestrator.run_full_pipeline(db)
+            ingestion = result.get("ingestion", {})
+            stored = ingestion.get("articles_stored", 0)
+            logger.info(f"Manual background ingestion completed: {stored} articles stored.")
+    except Exception as e:
+        logger.error(f"Manual background ingestion failed: {e}", exc_info=True)
+
+
+@router.post("/ingest")
 async def trigger_ingestion(
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Manually trigger news ingestion from all configured sources."""
-    from app.main import orchestrator
-    result = await orchestrator.run_full_pipeline(db)
-
-    ingestion = result.get("ingestion", {})
-    return IngestResponse(
-        status="completed",
-        articles_fetched=ingestion.get("articles_fetched", 0),
-        articles_stored=ingestion.get("articles_stored", 0),
-        articles_skipped=ingestion.get("articles_skipped", 0),
-        errors=ingestion.get("errors", []),
-    )
+    """Manually trigger news ingestion from all configured sources (runs in background)."""
+    # Trigger the heavy pipeline in the background so App Runner doesn't timeout
+    background_tasks.add_task(run_ingestion_background)
+    
+    return {
+        "status": "accepted",
+        "message": "Ingestion started in the background. It takes 1-2 minutes to complete.",
+    }
 
 
 @router.post("/reprocess")
