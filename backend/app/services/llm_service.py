@@ -56,11 +56,9 @@ IMPORTANT: Write your entire response in {output_language}."""
 
 # ── Prompt: Impact Analysis Between Two Articles ──────────────────────────────
 
-IMPACT_ANALYSIS_PROMPT = """You are a world-class news analyst writing for a general audience.
+IMPACT_ANALYSIS_PROMPT = """You are a senior geopolitical and intelligence analyst providing a detailed, professional briefing.
 
-Two news events have been flagged as potentially connected. Your job is to explain HOW one event impacts or relates to the other in plain language that anyone can understand.
-
-Important: These events could be from ANY domain — politics, military, economy, sports, technology, health, entertainment, environment, crime, science, culture, social issues, or anything else. Focus on the CAUSE-AND-EFFECT relationship regardless of the domain.
+Your task is to analyze two news events and explain their underlying connection, cause-and-effect relationship, and real-world implications. Your analysis must be highly detailed, well-structured, and easy to scan.
 
 == EVENT 1 ==
 Title: {title1}
@@ -75,22 +73,61 @@ Published: {published2}
 Content: {content2}
 
 == DETECTED CONNECTION SIGNALS ==
-These events share: {shared_entities_text}
+Shared themes/entities: {shared_entities_text}
 Connection strength: {confidence} ({total_score_pct}% match)
-They were published {time_context}.
+Time context: {time_context}
 
-== YOUR ANALYSIS (write in plain language, no jargon) ==
+== YOUR ANALYSIS ==
 
-Explain:
-1. **The Connection** — How are these two events linked? What's the cause-and-effect?
-2. **The Impact** — How does one event influence or affect the other? Who feels it?
-3. **The Bigger Picture** — What broader trend or pattern does this connection reveal?
-4. **What To Watch** — What should people pay attention to next?
+Please structure your briefing using the following strict format. Use Markdown, clear headings, and bullet points. Do not use filler introductions or conclusions.
 
-Be specific. Don't just say "they're related" — explain the actual mechanism of how one thing leads to another. Use real-world examples if helpful.
+### 🔗 The Core Connection
+Provide a precise, detailed explanation of how these two events are structurally or causally linked. Explain the mechanism connecting them (e.g., economic pressure, diplomatic retaliation, parallel technological trends).
 
-Write as if you're a trusted journalist explaining this to someone who reads the news but isn't an expert.
+### 💥 Direct Impact
+- Detail exactly who or what is affected by this connection.
+- Outline the immediate consequences observed in the reports.
 
+### 🌍 The Bigger Picture
+- Zoom out and explain the broader trend, strategy, or historical context.
+- Why does this interconnected development matter on a larger scale?
+
+### 🔮 What to Watch Next
+- Provide 2-3 specific, actionable indicators or future events that readers should monitor closely to see how this situation evolves.
+
+Write with the authoritative, clear tone of a premium intelligence newsletter (e.g., Stratfor, Economist).
+IMPORTANT: Write your entire response in {output_language}."""
+
+
+# ── Prompt: Overall Probe Summary ───────────────────────────────────────────
+
+PROBE_SUMMARY_PROMPT = """You are a senior geopolitical and intelligence analyst providing a detailed, professional briefing.
+
+A user has submitted a piece of news or text, and we have searched our intelligence corpus for related events. Your task is to provide an executive summary of how the user's text fits into the broader picture formed by these related events.
+
+== THE PROBE TEXT ==
+Source: {query_source}
+Text: {query_text}
+
+== CORPUS MATCHES ==
+{matches_text}
+
+== YOUR BRIEFING ==
+
+Please summarize the narrative landscape based on these matches. Use Markdown, clear headings, and bullet points. Do not use filler introductions.
+
+### 📰 The Narrative Landscape
+Provide a holistic overview of what the corpus reveals about the submitted text. Is this part of a larger ongoing story? Are there multiple angles being reported? 
+
+### 🎯 Key Intersections
+- Highlight the strongest thematic or entity connections between the probe text and the corpus.
+- What specific issues, people, or regions tie these stories together?
+
+### 📉 Intelligence Gaps & Weak Signals
+- If the matches are weak, explain what context is missing from the corpus.
+- If the matches are strong, point out any conflicting information or divergent reporting among the sources.
+
+Write with an authoritative, clear tone (e.g., Stratfor, Economist). Focus only on facts presented in the text and the matches.
 IMPORTANT: Write your entire response in {output_language}."""
 
 
@@ -372,98 +409,114 @@ class LLMService:
 
         return overview
 
+    def format_probe_summary(self, query_text: str, query_source: str, matches: list, preferred_language: str = "English") -> str:
+        """Format prompt for the overall Probe summary synthesis."""
+        matches_formatted = []
+        for i, m in enumerate(matches):
+            art = m["article"]
+            if isinstance(art, dict):
+                title = art.get("title", "Unknown")
+                source = art.get("source", "?")
+                score = m.get("score", 0)
+            else:
+                title = getattr(art, "title", "Unknown")
+                source = getattr(art, "source", "?")
+                score = m.get("score", 0)
+            matches_formatted.append(f"{i+1}. [{source}] {title} (Score: {score:.2f})")
+        
+        matches_text = "\n".join(matches_formatted) if matches_formatted else "No matches found."
+
+        return PROBE_SUMMARY_PROMPT.format(
+            query_text=query_text[:1000],
+            query_source=query_source,
+            matches_text=matches_text,
+            output_language=preferred_language,
+        )
+
     def overview_probe_summary(self, query_text: str, query_source: str,
                                 matches: list, probe_entities: list) -> str:
         """
-        Generate a network-style overview showing how the user's probe text
-        connects to multiple articles across the corpus.
-        Returns a structured overview map.
+        Generate a concise, conversational intelligence briefing explaining how
+        the probe text connects to the existing corpus. Pure prose — no tables, no badges.
         """
         if not matches:
-            return "No related articles found in the existing corpus."
+            return "No related articles were found in the corpus for your text."
+
+        strong   = [m for m in matches if m["score"] >= 0.50]
+        moderate = [m for m in matches if 0.40 <= m["score"] < 0.50]
+        weak     = [m for m in matches if m["score"] < 0.40]
+
+        # Build entity context string
+        entity_str = ""
+        if probe_entities:
+            entity_str = f" Key entities detected: **{', '.join(probe_entities[:5])}**."
 
         parts = []
 
-        # Header
-        strong = [m for m in matches if m["score"] >= 0.50]
-        moderate = [m for m in matches if 0.40 <= m["score"] < 0.50]
-        weak = [m for m in matches if m["score"] < 0.40]
-
-        parts.append(f"**🔍 Probe Overview: {len(matches)} connections found**")
+        # Opening context
+        short_text = query_text[:120] + "…" if len(query_text) > 120 else query_text
+        parts.append(f"**Query:** *{short_text}*")
         parts.append("")
 
-        # Your text summary
-        short_text = query_text[:100] + "..." if len(query_text) > 100 else query_text
-        parts.append(f"Your text: *\"{short_text}\"*")
-        parts.append(f"Source: {query_source}")
-
-        if probe_entities:
-            parts.append(f"Detected entities: **{', '.join(probe_entities[:5])}**")
+        # Intelligence signal headline
+        if strong:
+            headline = f"**{len(matches)} related articles found — {len(strong)} strongly match your text.**{entity_str}"
+        elif moderate:
+            headline = f"**{len(matches)} related articles found — {len(moderate)} share meaningful thematic overlap with your text.**{entity_str}"
+        else:
+            headline = f"**{len(matches)} related articles found — all with weak similarity signals.**{entity_str} Your text may be covering an early or under-represented angle."
+        parts.append(headline)
         parts.append("")
 
-        # Connection map
-        parts.append("**Connection Map:**")
+        # Connection breakdown — one sentence per article
+        parts.append("**How your text connects to existing coverage:**")
         parts.append("")
-        parts.append(f"  📰 Your News")
 
-        for i, m in enumerate(matches):
+        for i, m in enumerate(matches, 1):
             article = m["article"]
             if isinstance(article, dict):
-                art_title = article.get("title", "Unknown")[:55]
+                art_title = article.get("title", "Unknown")
                 art_source = article.get("source", "?")
             else:
-                art_title = getattr(article, "title", "Unknown")[:55]
+                art_title = getattr(article, "title", "Unknown")
                 art_source = getattr(article, "source", "?")
 
             score_val = m["score"]
             shared = m.get("shared_entities", [])
 
-            # Connection line with strength indicator
             if score_val >= 0.50:
-                connector = "━━━━"
-                icon = "🔴"
-                label = "STRONG"
+                link_desc = "strongly covers the same story"
             elif score_val >= 0.40:
-                connector = "────"
-                icon = "🟡"
-                label = "RELATED"
+                link_desc = "is meaningfully related"
             else:
-                connector = "╌╌╌╌"
-                icon = "⚪"
-                label = "WEAK"
+                link_desc = "shares a weak thematic thread"
 
-            branch = "├" if i < len(matches) - 1 else "└"
-            parts.append(f"  {branch}──{connector} {icon} [{art_source}] {art_title}")
-
-            # Shared entities inline
+            shared_note = ""
             if shared:
-                pad = "│" if i < len(matches) - 1 else " "
-                parts.append(f"  {pad}         Score: {score_val} ({label}) • Shared: {', '.join(shared[:3])}")
+                shared_note = f" (shared context: {', '.join(shared[:3])})"
+
+            parts.append(f"{i}. **{art_source}** — *{art_title[:90]}{'…' if len(art_title) > 90 else ''}* {link_desc}{shared_note}.")
 
         parts.append("")
 
-        # Summary
+        # Closing intelligence note
         if strong:
             parts.append(
-                f"**⚡ Key finding:** {len(strong)} article(s) strongly match your text. "
-                f"These are covering the same story from different angles."
+                "**Assessment:** Your text is part of an active, multi-source story thread already tracked in the corpus. "
+                "Cross-reference the strong matches to understand the full scope of coverage."
             )
         elif moderate:
             parts.append(
-                f"**📊 Key finding:** {len(moderate)} article(s) show meaningful connections. "
-                f"Your text relates to an ongoing story in the corpus."
+                "**Assessment:** Your text introduces a related but distinct angle on an ongoing narrative. "
+                "The moderate matches indicate thematic overlap — worth investigating for undercovered dimensions."
             )
         else:
             parts.append(
-                f"**ℹ️ Note:** All matches are weak — your text may cover a topic "
-                f"not well represented in the current corpus."
+                "**Assessment:** Your text appears to cover an angle not yet well-represented in the corpus. "
+                "These weak signals may indicate an emerging story worth tracking."
             )
 
-        parts.append("")
-        parts.append("*Use `detailed: true` for in-depth analysis of each connection.*")
-
         return "\n".join(parts)
-
 
 class BedrockLLMService(LLMService):
     """
@@ -589,7 +642,7 @@ class BedrockLLMService(LLMService):
 
     async def _invoke_deep(self, prompt: str) -> str:
         """Route to Llama 3.3 70B with more tokens for deep analysis."""
-        return await self._invoke_llama(prompt, max_tokens=1200)
+        return await self._invoke_llama(prompt, max_tokens=2500)
 
 
     async def _invoke_model(self, model_id: str, prompt: str, max_tokens: int = 800) -> str:
@@ -676,6 +729,14 @@ class BedrockLLMService(LLMService):
             else:
                 logger.error(f"Nova Pro fallback failed: {e}")
             return None
+
+    async def generate_probe_summary(
+        self, query_text: str, query_source: str, matches: list,
+        preferred_language: str = "English"
+    ) -> str:
+        prompt = self.format_probe_summary(query_text, query_source, matches, preferred_language)
+        result = await self._invoke_fast(prompt)
+        return result
 
     async def generate_deep_analysis(
         self, article: dict, entities: list, cluster_info: str,
@@ -769,6 +830,13 @@ class MockLLMService(LLMService):
     ) -> str:
         logger.info(f"Mock LLM: impact analysis [lang={preferred_language}]")
         return self.fallback_impact_analysis(score, shared_entities, article1, article2)
+
+    async def generate_probe_summary(
+        self, query_text: str, query_source: str, matches: list,
+        preferred_language: str = "English"
+    ) -> str:
+        logger.info(f"Mock LLM: probe summary [lang={preferred_language}]")
+        return "Mock analysis summary for probe feature."
 
     async def validate_connection(
         self, article1: dict, article2: dict, score: "RelationScore",

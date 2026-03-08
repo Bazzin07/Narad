@@ -60,7 +60,7 @@ export function TimelinePanel({ articleId }: { articleId: string }) {
     };
 
     return (
-        <div>
+        <div className={data ? "w-full max-w-full overflow-hidden" : ""}>
             {!data && !loading && (
                 <button
                     onClick={load}

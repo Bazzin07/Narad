@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import init_db, get_db
+from app.database import init_db, get_db, async_session
 
 # ── Service Instances (module-level singletons) ──────────────────────────────
 
@@ -90,6 +90,19 @@ async def _scheduled_ingestion():
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 
+async def _rebuild_faiss_from_db():
+    """Background task: wait for DB init, then embed all articles into FAISS."""
+    import asyncio
+    await asyncio.sleep(8)  # Wait for DB init to complete
+    try:
+        async with async_session() as db:
+            count = await embedding_service.rebuild_index(db)
+            faiss_count = embedding_service._faiss_index.ntotal if embedding_service._faiss_index else 0
+            logger.info(f"✅ FAISS rebuild complete: {count} articles, index has {faiss_count} vectors")
+    except Exception as e:
+        logger.error(f"FAISS rebuild from DB failed: {e}", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
@@ -102,10 +115,15 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(init_db())
     logger.info("✅ Database init started in background")
 
-    # Load FAISS index (local dev fallback — pgvector is authoritative in production)
+    # Always initialize FAISS in-memory index (RDS doesn't have pgvector extension)
+    embedding_service._ensure_faiss_index()
     embedding_service.load_index()
     faiss_count = embedding_service._faiss_index.ntotal if embedding_service._faiss_index else 0
-    logger.info(f"✅ Embedding service ready (FAISS fallback: {faiss_count} vectors)")
+    logger.info(f"✅ Embedding service ready (FAISS: {faiss_count} vectors)")
+
+    # Background task: rebuild FAISS from existing DB articles
+    asyncio.create_task(_rebuild_faiss_from_db())
+    logger.info("✅ FAISS rebuild from DB started in background")
 
     logger.info(f"✅ LLM backend: {settings.llm_backend}")
     logger.info(f"✅ Storage backend: {settings.storage_backend}")

@@ -495,7 +495,7 @@ class Orchestrator:
         probe_embedding = self.embedding.generate_embedding(text)
 
         # 4. FAISS search for similar articles
-        candidates = self.embedding.find_similar(probe_embedding, k=min(top_k * 3, 30))
+        candidates = await self.embedding.find_similar(probe_embedding, k=min(top_k * 3, 30))
         logger.info(f"Probe: FAISS returned {len(candidates)} candidates")
 
         if not candidates:
@@ -681,26 +681,12 @@ class Orchestrator:
 
         # Build analysis summary
         if response_matches:
-            top = response_matches[0]
-            total_related = sum(1 for m in response_matches if m.relation_score.total_score >= 0.40)
-            summary_parts = [
-                f"Found **{len(response_matches)} related articles** in the Narad corpus.",
-            ]
-            if total_related > 0:
-                summary_parts.append(
-                    f"{total_related} article(s) show meaningful connections."
-                )
-            summary_parts.append(
-                f"Strongest match: **\"{top.article.title}\"** "
-                f"from {top.article.source} "
-                f"(score: {top.relation_score.total_score}, "
-                f"confidence: {top.relation_score.confidence})."
+            analysis_summary = await self.llm.generate_probe_summary(
+                query_text=text,
+                query_source=source,
+                matches=matches,
+                preferred_language=preferred_language
             )
-            if top.shared_entities:
-                summary_parts.append(
-                    f"Shared entities: {', '.join(top.shared_entities[:5])}."
-                )
-            analysis_summary = " ".join(summary_parts)
         else:
             analysis_summary = "No closely related articles were found."
 

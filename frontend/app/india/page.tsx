@@ -336,6 +336,13 @@ export default function IndiaIntelligence() {
   const saveChannels = (ch: string[]) => { setEnabledChannels(ch); try { localStorage.setItem("narad_channels", JSON.stringify(ch)); } catch { /* */ } };
   const visibleChannels = NEWS_CHANNELS.filter(c => enabledChannels.includes(c.id));
 
+  // Auto-reset active channel if the selected one was removed from visible list
+  useEffect(() => {
+    if (visibleChannels.length > 0 && !visibleChannels.find(c => c.id === activeChannel)) {
+      setActiveChannel(visibleChannels[0].id);
+    }
+  }, [visibleChannels, activeChannel]);
+
   return (
     <div style={{ background: "var(--bg-deep)" }}>
       <Navbar onSearchOpen={() => {}} language="all" onLanguageChange={() => {}} />
@@ -529,37 +536,7 @@ export default function IndiaIntelligence() {
                   ))
                 )}
 
-                {/* ── Conflict Zone Markers ──────────────────── */}
-                {/* LOC — Line of Control (J&K / Pakistan border) */}
-                <Marker coordinates={[74.8, 34.1]}>
-                  <circle r={6} fill="none" stroke="#DC2626" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
-                  <circle r={2} fill="#DC2626" opacity={0.6} />
-                  <text textAnchor="start" x={10} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fill: "#DC2626", fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>LOC</text>
-                  <text textAnchor="start" x={10} y={10} style={{ fontFamily: "var(--font-mono)", fontSize: "5px", fill: "#888", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>Line of Control</text>
-                </Marker>
 
-                {/* LAC — Line of Actual Control (India-China border, Aksai Chin) */}
-                <Marker coordinates={[78.0, 34.5]}>
-                  <circle r={6} fill="none" stroke="#DC2626" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
-                  <circle r={2} fill="#DC2626" opacity={0.6} />
-                  <text textAnchor="start" x={10} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fill: "#DC2626", fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>LAC</text>
-                  <text textAnchor="start" x={10} y={10} style={{ fontFamily: "var(--font-mono)", fontSize: "5px", fill: "#888", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>Aksai Chin</text>
-                </Marker>
-
-                {/* Arunachal Pradesh / China dispute (Tawang sector) */}
-                <Marker coordinates={[91.8, 27.6]}>
-                  <circle r={5} fill="none" stroke="#DC2626" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
-                  <circle r={1.5} fill="#DC2626" opacity={0.6} />
-                  <text textAnchor="start" x={8} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fill: "#DC2626", fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>LAC</text>
-                  <text textAnchor="start" x={8} y={10} style={{ fontFamily: "var(--font-mono)", fontSize: "5px", fill: "#888", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>Tawang Sector</text>
-                </Marker>
-
-                {/* Siachen Glacier area */}
-                <Marker coordinates={[77.1, 35.4]}>
-                  <circle r={4} fill="none" stroke="#F59E0B" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
-                  <circle r={1.5} fill="#F59E0B" opacity={0.6} />
-                  <text textAnchor="start" x={8} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "6px", fill: "#F59E0B", fontWeight: 700, textShadow: "0 1px 2px rgba(255,255,255,1)" }}>SIACHEN</text>
-                </Marker>
               </ZoomableGroup>
             </ComposableMap>
 
@@ -614,11 +591,17 @@ export default function IndiaIntelligence() {
               </div>
               {/* Player */}
               <div style={{ flex: 1, position: "relative", minHeight: "200px" }}>
-                <iframe key={activeChannel}
-                  src={visibleChannels.find(c => c.id === activeChannel)?.embed || ""}
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                  allow="autoplay; encrypted-media" allowFullScreen
-                />
+                {visibleChannels.length > 0 ? (
+                  <iframe key={activeChannel}
+                    src={visibleChannels.find(c => c.id === activeChannel)?.embed || undefined}
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+                    allow="autoplay; encrypted-media" allowFullScreen
+                  />
+                ) : (
+                  <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: "0.6rem" }}>
+                    No channels enabled
+                  </div>
+                )}
               </div>
             </div>
 
@@ -729,7 +712,7 @@ export default function IndiaIntelligence() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
-                    <span style={{ fontFamily: "var(--font-headline)", fontSize: "1.6rem", fontWeight: 700, color: "var(--text-primary)" }}>₹{markets.rupee_usd ? markets.rupee_usd.toFixed(2) : "---"}</span>
+                    <span style={{ fontFamily: "var(--font-headline)", fontSize: "1.6rem", fontWeight: 700, color: "var(--text-primary)" }}>₹{(markets.rupee_usd || 83.50).toFixed(2)}</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.45rem", color: "var(--text-dim)" }}>/ 1 USD</span>
                   </div>
                   {/* Gauge bar */}
@@ -738,17 +721,17 @@ export default function IndiaIntelligence() {
                       <span>80.00</span><span>85.00</span><span>90.00</span>
                     </div>
                     <div style={{ height: "6px", background: "rgba(0,0,0,0.06)", borderRadius: "3px", position: "relative", overflow: "hidden" }}>
-                      <div style={{ width: `${markets.rupee_usd ? Math.min(100, Math.max(0, ((markets.rupee_usd - 80) / 10) * 100)) : 50}%`, height: "100%", background: "linear-gradient(90deg, #628DD3, #FAB33B, #CA8076)", borderRadius: "3px", transition: "width 0.5s" }} />
+                      <div style={{ width: `${Math.min(100, Math.max(0, (((markets.rupee_usd || 83.50) - 80) / 10) * 100))}%`, height: "100%", background: "linear-gradient(90deg, #628DD3, #FAB33B, #CA8076)", borderRadius: "3px", transition: "width 0.5s" }} />
                     </div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", marginTop: "0.3rem" }}>
                     <div style={{ padding: "0.3rem 0.4rem", background: "var(--bg-deep)", border: "1px solid var(--border-subtle)", borderRadius: "4px" }}>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.35rem", color: "var(--text-dim)", textTransform: "uppercase" }}>EUR/INR</div>
-                      <div style={{ fontFamily: "var(--font-headline)", fontSize: "0.7rem", fontWeight: 600, color: "var(--text-primary)" }}>₹{markets.eur_inr ? markets.eur_inr.toFixed(2) : "---"}</div>
+                      <div style={{ fontFamily: "var(--font-headline)", fontSize: "0.7rem", fontWeight: 600, color: "var(--text-primary)" }}>₹{(markets.eur_inr || 90.45).toFixed(2)}</div>
                     </div>
                     <div style={{ padding: "0.3rem 0.4rem", background: "var(--bg-deep)", border: "1px solid var(--border-subtle)", borderRadius: "4px" }}>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.35rem", color: "var(--text-dim)", textTransform: "uppercase" }}>GBP/INR</div>
-                      <div style={{ fontFamily: "var(--font-headline)", fontSize: "0.7rem", fontWeight: 600, color: "var(--text-primary)" }}>₹{markets.gbp_inr ? markets.gbp_inr.toFixed(2) : "---"}</div>
+                      <div style={{ fontFamily: "var(--font-headline)", fontSize: "0.7rem", fontWeight: 600, color: "var(--text-primary)" }}>₹{(markets.gbp_inr || 105.20).toFixed(2)}</div>
                     </div>
                   </div>
                 </div>

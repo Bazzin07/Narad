@@ -34,17 +34,23 @@ async def init_db():
     pgvector_ok = False
 
     async with engine.begin() as conn:
-        # Try enabling pgvector extension (requires PostgreSQL with vector extension installed)
+        # Try enabling pgvector extension inside a SAVEPOINT
+        # so failure doesn't abort the entire transaction
         try:
+            await conn.execute(sa_text("SAVEPOINT pgvector_check"))
             await conn.execute(sa_text("CREATE EXTENSION IF NOT EXISTS vector"))
             pgvector_ok = True
             logger.info("pgvector extension enabled")
         except Exception as e:
+            await conn.execute(sa_text("ROLLBACK TO SAVEPOINT pgvector_check"))
             logger.warning(f"pgvector extension not available: {e}. FAISS fallback will be used.")
 
-        # Create all tables
-        await conn.run_sync(ModelBase.metadata.create_all)
-        logger.info("Database tables created/verified")
+        # Create all tables (checkfirst=True won't add new columns to existing tables)
+        try:
+            await conn.run_sync(ModelBase.metadata.create_all)
+            logger.info("Database tables created/verified")
+        except Exception as e:
+            logger.warning(f"create_all partially failed (may be OK for existing tables): {e}")
 
         # Ensure new columns exist on existing databases (non-vector migrations)
         try:
@@ -56,6 +62,9 @@ async def init_db():
             ))
             await conn.execute(sa_text(
                 "ALTER TABLE articles ADD COLUMN IF NOT EXISTS state VARCHAR(50)"
+            ))
+            await conn.execute(sa_text(
+                "ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding TEXT"
             ))
             await conn.execute(sa_text(
                 "CREATE INDEX IF NOT EXISTS idx_articles_geo_scope ON articles (geographic_scope)"

@@ -83,9 +83,15 @@ class EmbeddingService:
     """
 
     def __init__(self):
-        self.dim = settings.embedding_dim
-        self.index_path = settings.faiss_index_path
         self.backend = settings.embedding_backend  # "local" or "titan"
+        # Compute effective dimension: Titan V2 only supports 256, 512, 1024
+        raw_dim = settings.embedding_dim
+        if self.backend == "titan":
+            valid_dims = [256, 512, 1024]
+            self.dim = min(valid_dims, key=lambda d: abs(d - raw_dim))
+        else:
+            self.dim = raw_dim
+        self.index_path = settings.faiss_index_path
 
         # FAISS fallback (local dev only)
         self._faiss_index = None
@@ -116,9 +122,15 @@ class EmbeddingService:
         if len(text) > 8_000:
             text = text[:8_000]
 
+        # Titan Embed V2 accepts inputText, dimensions (256|512|1024), normalize
+        titan_dim = int(self.dim)
+        # Titan V2 only supports 256, 512, or 1024 — clamp to nearest valid
+        valid_dims = [256, 512, 1024]
+        if titan_dim not in valid_dims:
+            titan_dim = min(valid_dims, key=lambda d: abs(d - titan_dim))
         body = json_mod.dumps({
             "inputText": text,
-            "dimensions": self.dim,
+            "dimensions": titan_dim,
             "normalize": True,
         })
 
@@ -246,13 +258,8 @@ class EmbeddingService:
             full_text = f"{article.title}. {article.content}"
             embedding = self.generate_embedding(full_text)
 
-            stored = False
-            if PGVECTOR_AVAILABLE:
-                stored = await self.store_embedding_db(article.id, embedding, db)
-
-            # Also maintain FAISS in-memory for fast lookups during this session
-            if not stored:
-                self._add_to_faiss(article.id, embedding)
+            # Always add to FAISS in-memory index (RDS doesn't have pgvector extension)
+            self._add_to_faiss(article.id, embedding)
 
             article.processed = max(article.processed, 2)
             await db.flush()
@@ -262,49 +269,74 @@ class EmbeddingService:
             return None
 
     async def rebuild_index(self, db: AsyncSession) -> int:
-        """Rebuild embeddings for all articles in the DB."""
-        result = await db.execute(select(Article).order_by(Article.created_at))
-        articles = result.scalars().all()
+        """Rebuild FAISS index from all articles in the DB.
+        
+        The DB fetch runs on the async thread. The CPU-heavy embedding loop
+        is offloaded to a thread-pool executor via asyncio.to_thread so the
+        event loop is never blocked and the server remains responsive.
+        """
+        import asyncio
+        from sqlalchemy import text as sa_text
 
-        # Reset in-memory FAISS
+        # --- async: fetch rows from DB ---
+        result = await db.execute(
+            sa_text("SELECT id, title, content FROM articles ORDER BY created_at")
+        )
+        rows = result.fetchall()
+
+        # Reset in-memory FAISS (sync, trivial)
         self._faiss_index = None
         self._faiss_article_ids = []
+        self._ensure_faiss_index()
 
-        count = 0
-        for article in articles:
-            try:
-                full_text = f"{article.title}. {article.content}"
-                embedding = self.generate_embedding(full_text)
+        # --- thread: generate embeddings without blocking the event loop ---
+        def _embed_all():
+            count = 0
+            for row in rows:
+                try:
+                    art_id, title, content = row[0], row[1], row[2]
+                    full_text = f"{title}. {content}"
+                    embedding = self.generate_embedding(full_text)
+                    self._add_to_faiss(art_id, embedding)
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Rebuild: embedding failed for {row[0]}: {e}")
+            return count
 
-                if PGVECTOR_AVAILABLE:
-                    await self.store_embedding_db(article.id, embedding, db)
-                else:
-                    self._add_to_faiss(article.id, embedding)
-
-                article.processed = max(article.processed, 2)
-                count += 1
-            except Exception as e:
-                logger.error(f"Rebuild: embedding failed for {article.id}: {e}")
-
-        if not PGVECTOR_AVAILABLE:
-            self.save_faiss_index()
-
-        await db.commit()
-        logger.info(f"Rebuilt embeddings for {count}/{len(articles)} articles")
+        count = await asyncio.to_thread(_embed_all)
+        logger.info(f"Rebuilt FAISS index: {count}/{len(rows)} articles embedded")
         return count
 
+
     async def process_unprocessed(self, db: AsyncSession, limit: int = 50) -> int:
-        """Generate embeddings for articles that don't have them yet."""
+        """Generate embeddings for articles that don't have them yet.
+        
+        Embedding generation is CPU-bound. We offload the inner loop to a
+        thread-pool executor so the event loop stays free during batch runs.
+        """
+        import asyncio
+
         result = await db.execute(
             select(Article).where(Article.processed < 2).limit(limit)
         )
         articles = result.scalars().all()
 
-        count = 0
-        for article in articles:
-            emb = await self.process_article(article, db)
-            if emb is not None:
-                count += 1
+        # Each article's embedding is generated synchronously by the model.
+        # We wrap the whole loop in to_thread so it doesn't freeze the event loop.
+        def _embed_articles():
+            count = 0
+            for article in articles:
+                try:
+                    full_text = f"{article.title}. {article.content or ''}"
+                    embedding = self.generate_embedding(full_text)
+                    self._add_to_faiss(article.id, embedding)
+                    article.processed = 2
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Embedding failed for {article.id}: {e}")
+            return count
+
+        count = await asyncio.to_thread(_embed_articles)
 
         if count > 0 and not PGVECTOR_AVAILABLE:
             self.save_faiss_index()
@@ -314,6 +346,7 @@ class EmbeddingService:
 
         logger.info(f"Embedding: processed {count}/{len(articles)} articles")
         return count
+
 
     # ── FAISS Disk Persistence (Local Dev Only) ────────────────────────────────
 

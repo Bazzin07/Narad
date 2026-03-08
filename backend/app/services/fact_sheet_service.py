@@ -63,20 +63,42 @@ class FactSheetService:
             raise ValueError(f"Article {article_id} not found")
 
         # 2. Find FAISS neighbours using embedding service (cosine similarity)
+        candidate_pairs = []
         try:
             seed_embedding = self.embedding.generate_embedding(
                 f"{seed.title}. {seed.content[:1000]}"
             )
-            similar = self.embedding.find_similar(seed_embedding, k=50)
+            similar = await self.embedding.find_similar(seed_embedding, k=50)
 
             # Filter: keep only high-similarity candidates (same-event threshold)
-            candidate_pairs = []
             for aid, cosine_score in similar:
                 if aid != article_id and cosine_score >= min_score:
                     candidate_pairs.append((aid, float(cosine_score)))
         except Exception as e:
             logger.error(f"FAISS search failed: {e}")
-            return self._empty_sheet(seed)
+
+        # SQL fallback when FAISS has no vectors
+        if not candidate_pairs:
+            try:
+                from datetime import timedelta
+                window = timedelta(days=7)
+                q = (
+                    select(Article)
+                    .where(Article.id != article_id)
+                    .where(Article.published_at >= (seed.published_at - window))
+                    .where(Article.published_at <= (seed.published_at + window))
+                    .order_by(Article.published_at.desc())
+                )
+                if seed.topic and seed.topic != "general":
+                    q = q.where(Article.topic == seed.topic)
+                q = q.limit(max_sources)
+                sql_result = await db.execute(q)
+                sql_articles = sql_result.scalars().all()
+                for a in sql_articles:
+                    candidate_pairs.append((a.id, 0.6))
+                logger.info(f"Fact sheet SQL fallback found {len(candidate_pairs)} candidates")
+            except Exception as e:
+                logger.warning(f"Fact sheet SQL fallback failed: {e}")
 
         if not candidate_pairs:
             return self._empty_sheet(seed)

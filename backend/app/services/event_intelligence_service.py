@@ -181,10 +181,8 @@ class EventIntelligenceService:
             signals = c.get("signals", {})
             emb = signals.get("embedding", 0)
             ent = signals.get("entity_overlap", 0)
-            # Require: embedding >= 0.30 AND (entity_overlap >= 0.20 OR embedding >= 0.50)
-            if emb < 0.30:
-                continue
-            if ent < 0.20 and emb < 0.50:
+            # Accept if: embedding >= 0.30 OR entity_overlap >= 0.20
+            if emb < 0.30 and ent < 0.20:
                 continue
             relevant.append(c)
 
@@ -306,7 +304,7 @@ class EventIntelligenceService:
         # Channel 1: FAISS vector similarity (broad)
         seed_emb = self.embedding.get_embedding_by_id(seed_id)
         if seed_emb is not None:
-            neighbours = self.embedding.find_similar(seed_emb, k=max_candidates + 5)
+            neighbours = await self.embedding.find_similar(seed_emb, k=max_candidates + 5)
             for aid, sim_score in neighbours:
                 if aid != seed_id:
                     candidates[aid] = sim_score
@@ -340,6 +338,28 @@ class EventIntelligenceService:
                         candidates[aid] = min(1.0, candidates[aid] + 0.05)
         except Exception as e:
             logger.debug(f"Entity linking failed: {e}")
+
+        # Channel 3: SQL topic + time window fallback (when FAISS empty + no entity links)
+        if not candidates:
+            try:
+                from datetime import timedelta
+                window = timedelta(days=7)
+                q = (
+                    select(Article.id)
+                    .where(Article.id != seed_id)
+                    .where(Article.published_at >= (seed.published_at - window))
+                    .where(Article.published_at <= (seed.published_at + window))
+                    .order_by(Article.published_at.desc())
+                )
+                if seed.topic and seed.topic != "general":
+                    q = q.where(Article.topic == seed.topic)
+                q = q.limit(max_candidates)
+                sql_result = await db.execute(q)
+                for row in sql_result.fetchall():
+                    candidates[row[0]] = 0.45  # Moderate base score for topic+time matches
+                logger.info(f"SQL fallback found {len(candidates)} candidates for explore")
+            except Exception as e:
+                logger.warning(f"SQL fallback for candidates failed: {e}")
 
         # Limit total candidates
         if len(candidates) > max_candidates:

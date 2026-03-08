@@ -327,14 +327,15 @@ class IngestionService:
         }
 
     def _extract_image(self, entry) -> Optional[str]:
-        """Extract image URL from RSS entry. Checks media:content, media:thumbnail, enclosures."""
-        # 1. media:content (most RSS feeds)
+        """Extract image URL from RSS entry. Checks media:content, media:thumbnail, enclosures, img tags."""
+        # 1. media:content - accept explicit image type OR URL with image extension
         if hasattr(entry, 'media_content') and entry.media_content:
             for media in entry.media_content:
                 if isinstance(media, dict) and media.get('url'):
+                    url = media['url']
                     mtype = media.get('type', '')
-                    if mtype.startswith('image') or not mtype:
-                        return media['url']
+                    if mtype.startswith('image') or not mtype or re.search(r'\.(jpe?g|png|webp|gif)(\?|$)', url, re.IGNORECASE):
+                        return url
 
         # 2. media:thumbnail
         if hasattr(entry, 'media_thumbnail') and entry.media_thumbnail:
@@ -347,16 +348,19 @@ class IngestionService:
             for enc in entry.enclosures:
                 if isinstance(enc, dict) and enc.get('href'):
                     etype = enc.get('type', '')
-                    if etype.startswith('image') or not etype:
-                        return enc['href']
+                    href = enc['href']
+                    if etype.startswith('image') or not etype or re.search(r'\.(jpe?g|png|webp|gif)(\?|$)', href, re.IGNORECASE):
+                        return href
 
-        # 4. Lightweight: extract first <img> from summary/content
+        # 4. Extract first <img> from HTML (skip tracking pixels/spacers)
         raw = entry.get('summary', '') or ''
         if hasattr(entry, 'content') and entry.content:
             raw = entry.content[0].get('value', '') or raw
         img_match = re.search(r'<img[^>]+src=["\']([^"\'>]+)["\']', raw)
         if img_match:
-            return img_match.group(1)
+            candidate = img_match.group(1)
+            if not re.search(r'(pixel|tracker|1x1|spacer|blank)', candidate, re.IGNORECASE):
+                return candidate
 
         return None
 

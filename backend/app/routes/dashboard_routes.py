@@ -348,17 +348,6 @@ async def get_market_data():
                 fetch_yf("NG=F", "natural_gas"),
             )
 
-        # Fallback values if API is acting up (to prevent UI breaking)
-        if not data["nifty"]: data["nifty"] = 24150.50
-        if not data["sensex"]: data["sensex"] = 79402.20
-        if not data["rupee_usd"]: data["rupee_usd"] = 83.25
-        if not data["gold"]: data["gold"] = 2030.10
-        if not data["crude_oil"]: data["crude_oil"] = 75.40
-        if not data["silver"]: data["silver"] = 28.50
-        if not data["natural_gas"]: data["natural_gas"] = 3.40
-        if not data["eur_inr"]: data["eur_inr"] = 89.90
-        if not data["gbp_inr"]: data["gbp_inr"] = 104.80
-
         data["updated_at"] = datetime.utcnow().isoformat()
         cache_set("market_data", data, 300)  # 5 min cache
     except Exception as e:
@@ -584,21 +573,20 @@ Return ONLY valid JSON matching this EXACT structure:
             logger.warning(f"GenAI regional analytics failed: {e}")
 
     # Ultimate fallback, pure zeroes avoiding static look
-    import random
     return {
         "tech": {
-            "ai_growth": f"+{random.randint(1, 15)}.{random.randint(0, 9)}%",
-            "funding": f"${random.randint(10, 50)}.{random.randint(0, 9)}M",
-            "sparkline": [random.randint(2, 10) for _ in range(7)]
+            "ai_growth": "+0.0%",
+            "funding": "$0.0M",
+            "sparkline": [0 for _ in range(7)]
         },
         "political": {
-            "sentiment_index": f"{random.randint(40, 70)}/100",
-            "sentiment_value": random.randint(40, 70),
-            "top_policies": ["Infrastructure", "Economy", "Healthcare", "Education"]
+            "sentiment_index": "50/100",
+            "sentiment_value": 50,
+            "top_policies": ["Insufficient Data"]
         },
         "societal": {
-            "migration_rate": f"{random.randint(1, 8)}.{random.randint(0, 9)}%",
-            "sparkline": [random.randint(1, 8) for _ in range(7)]
+            "migration_rate": "0.0%",
+            "sparkline": [0 for _ in range(7)]
         }
     }
 
@@ -901,7 +889,7 @@ async def ask_narad(
             }
 
         q_embedding = emb_svc.generate_embedding(question)
-        similar = emb_svc.find_similar(q_embedding, k=20)
+        similar = await emb_svc.find_similar(q_embedding, k=20)
 
         candidate_ids = [aid for aid, _ in similar if _ > 0.2][:20]
 

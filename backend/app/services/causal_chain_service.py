@@ -141,7 +141,7 @@ class CausalChainService:
         if seed_emb is None:
             raise ValueError("Seed article has no embedding")
 
-        neighbours = self.embedding.find_similar(seed_emb, k=top_k_neighbours + 1)
+        neighbours = await self.embedding.find_similar(seed_emb, k=top_k_neighbours + 1)
         neighbour_ids = [aid for aid, _ in neighbours if aid != seed_article_id][:top_k_neighbours]
 
         if not neighbour_ids:

@@ -17,6 +17,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 
+# ── SQL-based related article finder (fallback when FAISS has no embeddings) ──
+
+async def _find_related_sql(seed: Article, db: AsyncSession, limit: int = 15):
+    """Find related articles by topic + time window when FAISS is unavailable."""
+    from datetime import timedelta
+    window = timedelta(days=7)
+    q = (
+        select(Article)
+        .where(Article.id != seed.id)
+        .where(Article.published_at >= (seed.published_at - window))
+        .where(Article.published_at <= (seed.published_at + window))
+        .order_by(Article.published_at.desc())
+    )
+    if seed.topic and seed.topic != "general":
+        q = q.where(Article.topic == seed.topic)
+    q = q.limit(limit)
+    result = await db.execute(q)
+    return result.scalars().all()
+
+
 # ── Timeline View ─────────────────────────────────────────────────────────────
 
 @router.get("/timeline/{article_id}")
@@ -26,7 +46,7 @@ async def get_event_timeline(
 ):
     """
     Generate a time-ordered sequence of related articles for timeline visualization.
-    Uses FAISS similarity to find related events, sorted by published_at.
+    Uses FAISS similarity when available, falls back to SQL topic/time search.
     """
     from app.main import orchestrator
 
@@ -36,22 +56,29 @@ async def get_event_timeline(
     if not seed:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    # Get embedding and find similar articles
-    emb = orchestrator.embedding.get_embedding_by_id(article_id)
-    if emb is None:
-        raise HTTPException(status_code=400, detail="Article has no embedding")
+    # Try FAISS first, fall back to SQL topic/time search
+    articles = []
+    similarity_map = {}  # article_id -> similarity score
 
-    similar = orchestrator.embedding.find_similar(emb, k=20)
+    emb = orchestrator.embedding.get_embedding_by_id(article_id) if orchestrator.embedding else None
+    if emb is not None:
+        similar = await orchestrator.embedding.find_similar(emb, k=20)
+        candidate_ids = [aid for aid, _ in similar if aid != article_id]
+        similarity_map = {aid: s for aid, s in similar}
+        if candidate_ids:
+            articles_result = await db.execute(
+                select(Article).where(Article.id.in_(candidate_ids))
+            )
+            articles = articles_result.scalars().all()
+    
+    # SQL fallback when FAISS has no vectors
+    if not articles:
+        articles = await _find_related_sql(seed, db, limit=20)
+        for a in articles:
+            similarity_map[a.id] = 0.7  # default similarity for SQL matches
 
-    # Fetch all similar articles
-    article_ids = [aid for aid, _ in similar if aid != article_id]
-    if not article_ids:
-        return {"seed": _article_summary(seed), "timeline": []}
-
-    articles_result = await db.execute(
-        select(Article).where(Article.id.in_(article_ids))
-    )
-    articles = articles_result.scalars().all()
+    if not articles:
+        return {"seed": _article_summary(seed), "timeline": [], "total_events": 0}
 
     # Get entities for each article
     entity_map = {}
@@ -66,7 +93,7 @@ async def get_event_timeline(
     # Build timeline sorted by date
     timeline = []
     for a in articles:
-        sim_score = next((s for aid, s in similar if aid == a.id), 0)
+        sim_score = similarity_map.get(a.id, 0.5)
         if sim_score < 0.35:
             continue
         timeline.append({
@@ -232,27 +259,31 @@ async def get_source_bias_analysis(
     if not seed:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    # Find similar articles from different sources
-    emb = orchestrator.embedding.get_embedding_by_id(article_id)
-    if emb is None:
-        raise HTTPException(status_code=400, detail="Article has no embedding")
+    # Find similar articles from different sources — FAISS preferred, SQL fallback
+    articles = []
+    similarity_map = {}
 
-    similar = orchestrator.embedding.find_similar(emb, k=20)
+    emb = orchestrator.embedding.get_embedding_by_id(article_id) if orchestrator.embedding else None
+    if emb is not None:
+        similar = await orchestrator.embedding.find_similar(emb, k=20)
+        candidate_ids = [aid for aid, s in similar if s > 0.50 and aid != article_id]
+        similarity_map = {aid: s for aid, s in similar}
+        if candidate_ids:
+            articles_result = await db.execute(
+                select(Article).where(Article.id.in_(candidate_ids))
+            )
+            articles = articles_result.scalars().all()
 
-    # Fetch articles and filter for same-event, different source
-    candidate_ids = [aid for aid, s in similar if s > 0.50 and aid != article_id]
-    if not candidate_ids:
-        return {"seed": _article_summary(seed), "comparisons": [], "narrative": "No alternative source coverage found."}
-
-    articles_result = await db.execute(
-        select(Article).where(Article.id.in_(candidate_ids))
-    )
-    candidates = articles_result.scalars().all()
+    # SQL fallback when FAISS has no vectors
+    if not articles:
+        articles = await _find_related_sql(seed, db, limit=20)
+        for a in articles:
+            similarity_map[a.id] = 0.7
 
     # Pick up to 5 from different sources
     seen_sources = {seed.source.lower()}
     selected = []
-    for a in sorted(candidates, key=lambda x: next((s for aid, s in similar if aid == x.id), 0), reverse=True):
+    for a in sorted(articles, key=lambda x: similarity_map.get(x.id, 0), reverse=True):
         src_key = a.source.lower()
         if src_key not in seen_sources:
             seen_sources.add(src_key)
@@ -261,7 +292,7 @@ async def get_source_bias_analysis(
             break
 
     if not selected:
-        return {"seed": _article_summary(seed), "comparisons": [], "narrative": "No alternative source coverage found."}
+        return {"seed": _article_summary(seed), "comparisons": [], "narrative": "No alternative source coverage found.", "total_sources": 1}
 
     # Analyze each source's framing
     comparisons = []

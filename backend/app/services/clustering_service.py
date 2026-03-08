@@ -29,17 +29,17 @@ class ClusteringService:
         from sklearn.cluster import DBSCAN
 
         es = self.embedding_service
-        es._ensure_index()
+        es._ensure_faiss_index()
 
-        if es.index.ntotal < 2:
+        if es._faiss_index is None or es._faiss_index.ntotal < 2:
             logger.info("Not enough articles for clustering")
             return {}
 
         # Get all embeddings from FAISS
         import faiss
-        n = es.index.ntotal
+        n = es._faiss_index.ntotal
         dim = es.dim
-        xb = faiss.rev_swig_ptr(es.index.get_xb(), n * dim)
+        xb = faiss.rev_swig_ptr(es._faiss_index.get_xb(), n * dim)
         embeddings = xb.reshape(n, dim).copy()
 
         # DBSCAN with cosine distance
@@ -55,8 +55,8 @@ class ClusteringService:
             label = int(label)
             if label not in clusters:
                 clusters[label] = []
-            if idx < len(es.article_ids):
-                clusters[label].append(es.article_ids[idx])
+            if idx < len(es._faiss_article_ids):
+                clusters[label].append(es._faiss_article_ids[idx])
 
         # Store cluster assignments in DB
         await self._store_clusters(clusters, db)

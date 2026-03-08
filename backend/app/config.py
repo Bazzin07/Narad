@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     max_calls_per_session: int = 10
 
     # ── Embedding ─────────────────────────────────────────────
-    embedding_backend: str = "local"  # "local" or "titan"
+    embedding_backend: str = "local"  # "local" or "titan" (set EMBEDDING_BACKEND=titan on AWS)
     embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
     embedding_dim: int = 384
     titan_embedding_model_id: str = "amazon.titan-embed-text-v2:0"

@@ -6,6 +6,9 @@ import Link from "next/link";
 import ClientShell from "../components/ClientShell";
 import { probe, type ProbeMatch } from "../lib/api";
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 export default function ProbePage() {
     const [language, setLanguage] = useState("all");
     const [text, setText] = useState("");
@@ -262,18 +265,41 @@ export default function ProbePage() {
                                     >
                                         Analysis Overview
                                     </span>
-                                    <pre
-                                        style={{
-                                            fontFamily: "var(--font-mono)",
-                                            fontSize: "0.75rem",
-                                            color: "var(--text-secondary)",
-                                            lineHeight: 1.7,
-                                            whiteSpace: "pre-wrap",
-                                            margin: 0,
-                                        }}
-                                    >
-                                        {overview}
-                                    </pre>
+                                    <div style={{
+                                        fontFamily: "var(--font-body)",
+                                        fontSize: "0.88rem",
+                                        color: "var(--text-secondary)",
+                                        lineHeight: 1.8,
+                                    }}>
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                p: ({ node, ...props }) => <p style={{ marginBottom: "0.9em", marginTop: 0 }} {...props} />,
+                                                strong: ({ node, ...props }) => <strong style={{ color: "var(--text-primary)", fontWeight: 600 }} {...props} />,
+                                                em: ({ node, ...props }) => <em style={{ color: "var(--text-muted)", fontStyle: "italic" }} {...props} />,
+                                                ul: ({ node, ...props }) => <ul style={{ marginBottom: "0.9em", paddingLeft: "1.4em", listStyleType: "disc" }} {...props} />,
+                                                ol: ({ node, ...props }) => <ol style={{ marginBottom: "0.9em", paddingLeft: "1.4em", listStyleType: "decimal" }} {...props} />,
+                                                li: ({ node, ...props }) => <li style={{ marginBottom: "0.3em" }} {...props} />,
+                                                blockquote: ({ node, ...props }) => (
+                                                    <blockquote
+                                                        style={{
+                                                            borderLeft: "3px solid var(--accent)",
+                                                            paddingLeft: "1rem",
+                                                            margin: "0.8em 0",
+                                                            color: "var(--text-secondary)",
+                                                            fontStyle: "normal",
+                                                        }}
+                                                        {...props}
+                                                    />
+                                                ),
+                                                hr: () => <hr style={{ border: "none", borderTop: "1px solid var(--border-subtle)", margin: "1em 0" }} />,
+                                                h1: ({ node, ...props }) => <h2 style={{ color: "var(--text-primary)", fontFamily: "var(--font-headline)", fontSize: "1.05rem", fontWeight: 600, marginBottom: "0.4em", marginTop: "1em" }} {...props} />,
+                                                h2: ({ node, ...props }) => <h3 style={{ color: "var(--text-primary)", fontFamily: "var(--font-headline)", fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.4em", marginTop: "0.8em" }} {...props} />,
+                                            }}
+                                        >
+                                            {overview}
+                                        </ReactMarkdown>
+                                    </div>
                                 </motion.div>
                             )}
 

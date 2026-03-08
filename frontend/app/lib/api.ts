@@ -661,7 +661,7 @@ export async function getDomainRadar(state: string | null): Promise<DomainRadarR
 
 export async function getSituationRoom(state: string | null): Promise<SituationRoomResponse> {
     const qs = state ? `?state=${encodeURIComponent(state)}` : "";
-    return apiFetch(`/api/dashboard/situation-room${qs}`, { method: "POST", timeoutMs: 20_000 });
+    return apiFetch(`/api/dashboard/situation-room${qs}`, { method: "POST", timeoutMs: 60_000 });
 }
 
 export async function getNarrativeConflicts(state: string | null): Promise<NarrativeConflictsResponse> {
@@ -673,6 +673,6 @@ export async function askNarad(question: string, state: string | null, detailed 
     return apiFetch(`/api/dashboard/ask`, {
         method: "POST",
         body: JSON.stringify({ question, state, detailed }),
-        timeoutMs: 30_000,
+        timeoutMs: 60_000,
     });
 }
