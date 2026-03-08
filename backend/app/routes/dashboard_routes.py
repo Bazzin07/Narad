@@ -874,15 +874,32 @@ async def ask_narad(
         if not question:
             raise HTTPException(status_code=400, detail="Question cannot be empty")
 
+        logger.info(f"Ask Narad: question='{question[:80]}', state={body.state}")
+
+        if orchestrator is None:
+            logger.error("Ask Narad: orchestrator is None — service not initialized")
+            return {
+                "answer": "Narad is still starting up. Please try again in a minute.",
+                "sources": [], "pages_retrieved": 0, "articles_scanned": 0, "source": "startup",
+            }
+
         # Cache check
         cache_key = llm_cache.make_key("ask_narad", question_cache_key(question), body.state or "all")
         cached = llm_cache.get(cache_key)
         if cached:
             import json as _json
+            logger.info("Ask Narad: cache HIT")
             return _json.loads(cached)
 
         # Step 1: FAISS similarity search on the question
         emb_svc = orchestrator.embedding
+        if emb_svc is None:
+            logger.error("Ask Narad: embedding service is None")
+            return {
+                "answer": "The search engine is still initializing. Please try again shortly.",
+                "sources": [], "pages_retrieved": 0, "articles_scanned": 0, "source": "startup",
+            }
+
         q_embedding = emb_svc.generate_embedding(question)
         similar = emb_svc.find_similar(q_embedding, k=20)
 
@@ -961,15 +978,18 @@ INSTRUCTIONS: DO NOT use any emojis. DO NOT use markdown bolding like **text**. 
 
         llm = getattr(orchestrator, "llm", None)
         answer = None
+        logger.info(f"Ask Narad: LLM available={llm is not None}, articles={len(art_dicts)}, pages={len(top_pages)}")
 
         if llm and hasattr(llm, "_invoke_llama"):
             try:
                 answer = await llm._invoke_llama(prompt, max_tokens=600)
+                logger.info(f"Ask Narad: Llama OK, answer_len={len(answer) if answer else 0}")
             except Exception as e:
                 logger.warning(f"Ask Narad Llama 3.3 70B failed: {e}")
         elif llm and hasattr(llm, "_invoke_fast"):
             try:
                 answer = await llm._invoke_fast(prompt)
+                logger.info(f"Ask Narad: fast OK, answer_len={len(answer) if answer else 0}")
             except Exception as e:
                 logger.warning(f"Ask Narad fast fallback failed: {e}")
 
@@ -977,13 +997,15 @@ INSTRUCTIONS: DO NOT use any emojis. DO NOT use markdown bolding like **text**. 
         if not answer and llm and hasattr(llm, "_invoke_nova"):
             try:
                 answer = await llm._invoke_nova(prompt, max_tokens=600)
+                logger.info(f"Ask Narad: Nova Pro OK, answer_len={len(answer) if answer else 0}")
             except Exception as e:
                 logger.warning(f"Ask Narad Nova Pro fallback failed: {e}")
 
-        # Final fallback: deterministic
+        # Final fallback: deterministic summary from retrieved articles
         if not answer:
+            logger.warning("Ask Narad: all LLM calls failed, using deterministic fallback")
             bullets = "\n".join(f"- [{s['source']}] {s['title']}" for s in sources[:5])
-            answer = f"Here are the most relevant articles about your question:\n\n{bullets}"
+            answer = f"Based on recent reporting, here are the most relevant articles about your question:\n\n{bullets}\n\nFor more details, check the sources linked below."
 
         response = {
             "answer": answer,

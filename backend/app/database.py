@@ -29,47 +29,58 @@ class Base(DeclarativeBase):
 async def init_db():
     """Create all tables (dev convenience — use Alembic in prod)."""
     from app.models.article import Base as ModelBase  # noqa: F811
-    from sqlalchemy import text
+    from sqlalchemy import text as sa_text
+
+    pgvector_ok = False
+
     async with engine.begin() as conn:
-        # Enable pgvector extension (requires PostgreSQL with vector extension installed)
+        # Try enabling pgvector extension (requires PostgreSQL with vector extension installed)
         try:
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.execute(sa_text("CREATE EXTENSION IF NOT EXISTS vector"))
+            pgvector_ok = True
+            logger.info("pgvector extension enabled")
         except Exception as e:
             logger.warning(f"pgvector extension not available: {e}. FAISS fallback will be used.")
 
+        # Create all tables
         await conn.run_sync(ModelBase.metadata.create_all)
+        logger.info("Database tables created/verified")
 
-        # Ensure new columns exist on existing databases (migrations)
+        # Ensure new columns exist on existing databases (non-vector migrations)
         try:
-            await conn.execute(text(
+            await conn.execute(sa_text(
                 "ALTER TABLE articles ADD COLUMN IF NOT EXISTS geographic_scope VARCHAR(10) DEFAULT 'global'"
             ))
-            await conn.execute(text(
+            await conn.execute(sa_text(
                 "ALTER TABLE articles ADD COLUMN IF NOT EXISTS sentiment_score FLOAT"
             ))
-            await conn.execute(text(
+            await conn.execute(sa_text(
                 "ALTER TABLE articles ADD COLUMN IF NOT EXISTS state VARCHAR(50)"
             ))
-            # pgvector embedding column (only added when pgvector is available)
-            await conn.execute(text(
-                "ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(384)"
-            ))
-            # pgvector similarity search index (cosine distance)
-            await conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS idx_articles_embedding ON articles USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
-            ))
-            # Add indexes if not present (safe — IF NOT EXISTS)
-            await conn.execute(text(
+            await conn.execute(sa_text(
                 "CREATE INDEX IF NOT EXISTS idx_articles_geo_scope ON articles (geographic_scope)"
             ))
-            await conn.execute(text(
+            await conn.execute(sa_text(
                 "CREATE INDEX IF NOT EXISTS idx_articles_geo_scope_published ON articles (geographic_scope, published_at)"
             ))
-            await conn.execute(text(
+            await conn.execute(sa_text(
                 "CREATE INDEX IF NOT EXISTS idx_articles_state ON articles (state)"
             ))
-        except Exception:
-            pass  # Column already exists or unsupported DB
+        except Exception as e:
+            logger.warning(f"Migration step skipped: {e}")
+
+        # pgvector-specific DDL (only when extension is available)
+        if pgvector_ok:
+            try:
+                await conn.execute(sa_text(
+                    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(384)"
+                ))
+                await conn.execute(sa_text(
+                    "CREATE INDEX IF NOT EXISTS idx_articles_embedding ON articles USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+                ))
+                logger.info("pgvector embedding column and index configured")
+            except Exception as e:
+                logger.warning(f"pgvector DDL skipped: {e}")
 
 
 async def get_db() -> AsyncSession:

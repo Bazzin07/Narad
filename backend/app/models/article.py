@@ -82,7 +82,7 @@ class Article(Base):
     geographic_scope = Column(String(10), nullable=True, default="global")  # india, global, mixed
     state = Column(String(50), nullable=True)  # indian state: delhi, maharashtra, etc.
     sentiment_score = Column(Float, nullable=True)  # -1.0 (negative) to 1.0 (positive)
-    embedding = Column(Vector(384), nullable=True) if PGVECTOR_AVAILABLE and Vector else Column(Text, nullable=True)  # 384-dim vector for pgvector
+    embedding = Column(Text, nullable=True)  # Serialized embedding (FAISS handles similarity search)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

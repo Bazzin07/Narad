@@ -322,21 +322,21 @@ export default function ArticlePage({ params }: { params: Promise<{ id: string }
                                     fontSize: "0.7rem",
                                     letterSpacing: "0.08em",
                                     textTransform: "uppercase",
-                                    color: "var(--text-primary)",
+                                    color: "var(--accent)",
                                     background: "transparent",
-                                    border: "1px solid var(--text-primary)",
+                                    border: "1px solid var(--accent)",
                                     padding: "10px 24px",
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "10px",
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = "var(--text-primary)";
-                                    e.currentTarget.style.color = "var(--bg-primary)";
+                                    e.currentTarget.style.background = "var(--accent)";
+                                    e.currentTarget.style.color = "#fff";
                                 }}
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.background = "transparent";
-                                    e.currentTarget.style.color = "var(--text-primary)";
+                                    e.currentTarget.style.color = "var(--accent)";
                                 }}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

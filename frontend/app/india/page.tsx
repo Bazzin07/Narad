@@ -502,11 +502,11 @@ export default function IndiaIntelligence() {
                         style={{
                           default: {
                             fill: sel ? "rgba(98, 141, 211, 0.2)" : h ? heatFill(h.avg_sentiment, h.article_count) : "var(--bg-surface)",
-                            stroke: sel ? "var(--accent)" : "var(--border-visible)", strokeWidth: sel ? 1.2 : 0.4,
+                            stroke: sel ? "var(--accent)" : "#888", strokeWidth: sel ? 1.5 : 0.8,
                             outline: "none", cursor: "pointer", transition: "fill 0.15s",
                           },
-                          hover: { fill: sel ? "rgba(98, 141, 211, 0.3)" : "rgba(250, 179, 59, 0.3)", stroke: "var(--accent)", strokeWidth: 0.8, outline: "none", cursor: "pointer" },
-                          pressed: { fill: "rgba(98, 141, 211, 0.4)", stroke: "var(--accent)", strokeWidth: 1.2, outline: "none" },
+                          hover: { fill: sel ? "rgba(98, 141, 211, 0.3)" : "rgba(250, 179, 59, 0.3)", stroke: "var(--accent)", strokeWidth: 1.2, outline: "none", cursor: "pointer" },
+                          pressed: { fill: "rgba(98, 141, 211, 0.4)", stroke: "var(--accent)", strokeWidth: 1.5, outline: "none" },
                         }}
                       />
                     );
@@ -528,6 +528,38 @@ export default function IndiaIntelligence() {
                     </Marker>
                   ))
                 )}
+
+                {/* ── Conflict Zone Markers ──────────────────── */}
+                {/* LOC — Line of Control (J&K / Pakistan border) */}
+                <Marker coordinates={[74.8, 34.1]}>
+                  <circle r={6} fill="none" stroke="#DC2626" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
+                  <circle r={2} fill="#DC2626" opacity={0.6} />
+                  <text textAnchor="start" x={10} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fill: "#DC2626", fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>LOC</text>
+                  <text textAnchor="start" x={10} y={10} style={{ fontFamily: "var(--font-mono)", fontSize: "5px", fill: "#888", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>Line of Control</text>
+                </Marker>
+
+                {/* LAC — Line of Actual Control (India-China border, Aksai Chin) */}
+                <Marker coordinates={[78.0, 34.5]}>
+                  <circle r={6} fill="none" stroke="#DC2626" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
+                  <circle r={2} fill="#DC2626" opacity={0.6} />
+                  <text textAnchor="start" x={10} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fill: "#DC2626", fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>LAC</text>
+                  <text textAnchor="start" x={10} y={10} style={{ fontFamily: "var(--font-mono)", fontSize: "5px", fill: "#888", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>Aksai Chin</text>
+                </Marker>
+
+                {/* Arunachal Pradesh / China dispute (Tawang sector) */}
+                <Marker coordinates={[91.8, 27.6]}>
+                  <circle r={5} fill="none" stroke="#DC2626" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
+                  <circle r={1.5} fill="#DC2626" opacity={0.6} />
+                  <text textAnchor="start" x={8} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fill: "#DC2626", fontWeight: 700, letterSpacing: "0.05em", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>LAC</text>
+                  <text textAnchor="start" x={8} y={10} style={{ fontFamily: "var(--font-mono)", fontSize: "5px", fill: "#888", textShadow: "0 1px 2px rgba(255,255,255,1)" }}>Tawang Sector</text>
+                </Marker>
+
+                {/* Siachen Glacier area */}
+                <Marker coordinates={[77.1, 35.4]}>
+                  <circle r={4} fill="none" stroke="#F59E0B" strokeWidth={1} strokeDasharray="2,2" opacity={0.8} />
+                  <circle r={1.5} fill="#F59E0B" opacity={0.6} />
+                  <text textAnchor="start" x={8} y={2} style={{ fontFamily: "var(--font-mono)", fontSize: "6px", fill: "#F59E0B", fontWeight: 700, textShadow: "0 1px 2px rgba(255,255,255,1)" }}>SIACHEN</text>
+                </Marker>
               </ZoomableGroup>
             </ComposableMap>
 
@@ -600,7 +632,6 @@ export default function IndiaIntelligence() {
               }}>
                 <span style={{ fontSize: "0.8rem" }}>💬</span>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.5rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-primary)" }}>Ask Narad</span>
-                <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "0.35rem", color: "var(--text-dim)" }}>RAG · Nova Pro</span>
               </div>
 
               {/* Chat history — scrollable */}
@@ -609,7 +640,7 @@ export default function IndiaIntelligence() {
                   <div style={{ padding: "0.5rem", background: "var(--bg-deep)", border: "1px solid var(--border-subtle)" }}>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.42rem", color: "var(--text-dim)", marginBottom: "0.35rem" }}>Try asking:</div>
                     {["What is happening in Kashmir?", "Latest India economy news?", "Key political events this week?"].map((q, i) => (
-                      <button key={i} onClick={() => setAskQuestion(q)}
+                      <button key={i} onClick={() => { setAskQuestion(q); setTimeout(() => { setAskQuestion(""); setAskLoading(true); askNarad(q, selectedState).then(r => setAskHistory(prev => [...prev, { q, r }])).catch(() => setAskHistory(prev => [...prev, { q, r: { answer: "Failed to get answer. Please try again.", sources: [], pages_retrieved: 0, articles_scanned: 0, source: "error" } }])).finally(() => setAskLoading(false)); }, 0); }}
                         style={{ display: "block", width: "100%", textAlign: "left", padding: "0.25rem 0.4rem", margin: "0.12rem 0", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)", fontFamily: "var(--font-body)", fontSize: "0.62rem", cursor: "pointer" }}>
                         {q}
                       </button>
