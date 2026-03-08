@@ -1,0 +1,218 @@
+"""
+Narad v2 — GenAI-Powered Event Intelligence Platform
+FastAPI application entry point.
+"""
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
+from app.database import init_db, get_db
+
+# ── Service Instances (module-level singletons) ──────────────────────────────
+
+from app.services.ingestion_service import IngestionService
+from app.services.entity_service import EntityService
+from app.services.embedding_service import EmbeddingService
+from app.services.clustering_service import ClusteringService
+from app.services.scoring_service import ScoringService
+from app.services.validation_service import ValidationService
+from app.services.llm_service import get_llm_service
+from app.services.orchestrator import Orchestrator
+from app.services.event_intelligence_service import EventIntelligenceService
+from app.services.fact_sheet_service import FactSheetService
+
+# Initialize services
+ingestion_service = IngestionService()
+entity_service = EntityService()
+embedding_service = EmbeddingService()
+clustering_service = ClusteringService(embedding_service)
+scoring_service = ScoringService(embedding_service, entity_service, clustering_service)
+validation_service = ValidationService()
+llm_service = get_llm_service()
+
+orchestrator = Orchestrator(
+    ingestion_service=ingestion_service,
+    entity_service=entity_service,
+    embedding_service=embedding_service,
+    clustering_service=clustering_service,
+    scoring_service=scoring_service,
+    validation_service=validation_service,
+    llm_service=llm_service,
+)
+
+
+
+event_intelligence_service = EventIntelligenceService(
+    embedding_service=embedding_service,
+    entity_service=entity_service,
+    scoring_service=scoring_service,
+    clustering_service=clustering_service,
+    llm_service=llm_service,
+)
+
+fact_sheet_service = FactSheetService(
+    embedding_service=embedding_service,
+    entity_service=entity_service,
+    scoring_service=scoring_service,
+    llm_service=llm_service,
+)
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+# ── Background Ingestion ──────────────────────────────────────────────────────
+
+_scheduler = None
+
+
+async def _scheduled_ingestion():
+    """Background job: run ingestion pipeline every 30 minutes."""
+    from app.database import async_session
+    try:
+        async with async_session() as db:
+            result = await orchestrator.run_full_pipeline(db)
+            ingestion = result.get("ingestion", {})
+            stored = ingestion.get("articles_stored", 0)
+            logger.info(f"⏰ Scheduled ingestion: {stored} new articles stored")
+    except Exception as e:
+        logger.error(f"⏰ Scheduled ingestion failed: {e}")
+
+
+# ── Lifespan ──────────────────────────────────────────────────────────────────
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
+    global _scheduler
+    logger.info("🚀 Narad v2 starting up...")
+
+    # Initialize database in the background so the health endpoint is immediately
+    # available for App Runner's health check. DB will be ready within a few seconds.
+    import asyncio
+    asyncio.create_task(init_db())
+    logger.info("✅ Database init started in background")
+
+    # Load FAISS index (local dev fallback — pgvector is authoritative in production)
+    embedding_service.load_index()
+    faiss_count = embedding_service._faiss_index.ntotal if embedding_service._faiss_index else 0
+    logger.info(f"✅ Embedding service ready (FAISS fallback: {faiss_count} vectors)")
+
+    logger.info(f"✅ LLM backend: {settings.llm_backend}")
+    logger.info(f"✅ Storage backend: {settings.storage_backend}")
+    logger.info(f"✅ Score threshold: {settings.score_threshold}")
+
+    # v2: Start background ingestion scheduler
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        _scheduler = AsyncIOScheduler()
+        _scheduler.add_job(_scheduled_ingestion, "interval", minutes=30, id="ingestion_cron")
+        _scheduler.start()
+        logger.info("✅ Background ingestion scheduler started (every 30 min)")
+    except ImportError:
+        logger.warning("⚠️ APScheduler not installed — background ingestion disabled. Install with: pip install apscheduler")
+    except Exception as e:
+        logger.warning(f"⚠️ Scheduler failed to start: {e}")
+
+    yield
+
+    # Shutdown
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+        logger.info("✅ Scheduler stopped")
+    logger.info("🛑 Narad shutting down...")
+    embedding_service.save_index()
+    logger.info("✅ FAISS index saved")
+
+
+# ── FastAPI App ───────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="Narad — Event Intelligence Platform",
+    description=(
+        "GenAI-powered platform that discovers hidden connections between news events. "
+        "Deterministic backend detects relationships. Generative AI explains them."
+    ),
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+from app.routes.news_routes import router as news_router
+from app.routes.compare_routes import router as compare_router
+from app.routes.probe_routes import router as probe_router
+from app.routes.chain_routes import router as chain_router
+from app.routes.source_routes import router as source_router
+from app.routes.analytics_routes import router as analytics_router
+from app.routes.dashboard_routes import router as dashboard_router
+from app.routes.chat_routes import router as chat_router
+
+app.include_router(news_router)
+app.include_router(compare_router)
+app.include_router(probe_router)
+app.include_router(chain_router)
+app.include_router(source_router)
+app.include_router(analytics_router)
+app.include_router(dashboard_router)
+app.include_router(chat_router)
+
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "narad",
+        "version": "1.0.0",
+        "llm_backend": settings.llm_backend,
+        "storage_backend": settings.storage_backend,
+        "faiss_vectors": embedding_service._faiss_index.ntotal if embedding_service._faiss_index else 0,
+    }
+
+
+@app.get("/")
+async def root():
+    return {
+        "name": "Narad — Event Intelligence Platform",
+        "description": "Discover hidden connections between news events",
+        "docs": "/docs",
+        "health": "/health",
+        "endpoints": {
+            "news": "/api/news",
+            "compare": "/api/compare",
+            "probe": "/api/probe (POST) — News Probe",
+            "explore": "/api/news/{article_id}/explore (POST) — Event Intelligence",
+            "fact_sheet": "/api/news/{article_id}/fact-sheet (GET) — Multi-Source Fact Sheet",
+            "source_health": "/api/sources/health (GET) — Source Health Monitor",
+            "timeline": "/api/analytics/timeline/{article_id} (GET) — Event Timeline",
+            "entity_graph": "/api/analytics/entity-graph/{article_id} (GET) — Knowledge Graph",
+            "sentiment_topic": "/api/analytics/sentiment/topic/{topic} (GET) — Sentiment Trends",
+            "sentiment_entity": "/api/analytics/sentiment/entity/{name} (GET) — Entity Sentiment",
+            "bias_analysis": "/api/analytics/bias/{article_id} (POST) — Source Bias",
+            "dashboard_heatmap": "/api/dashboard/heatmap (GET) — India Heatmap",
+            "dashboard_briefing": "/api/dashboard/briefing/{state} (POST) — AI State Briefing",
+            "dashboard_news": "/api/dashboard/news?state= (GET) — State News",
+            "dashboard_markets": "/api/dashboard/markets (GET) — Market Data",
+            "live_chat": "/ws/chat (WebSocket) — Live Chat",
+            "clusters": "/api/clusters",
+            "ingest": "/api/news/ingest (POST)",
+        },
+    }

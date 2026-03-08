@@ -1,0 +1,42 @@
+# ─── Secrets & Environment ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+.pytest_cache/
+*.log
+
+# ─── Node / Next.js ──────────────────────────────────────────────────────────
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
+*.tsbuildinfo
+
+# ─── Data & ML ───────────────────────────────────────────────────────────────
+data/
+*.faiss
+*.db
+*.sqlite
+
+# ─── AWS / Deployment (local configs only) ───────────────────────────────────
+.aws/
+
+# ─── Editor ──────────────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
