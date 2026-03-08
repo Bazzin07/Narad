@@ -40,3 +40,9 @@ data/
 *.swo
 .idea/
 .vscode/settings.json
+
+# ─── Deployment / Internal tooling (not for repo) ────────────────────────────
+AGENT_HANDOFF_WORKFLOW.md
+DEPLOY-AWS.md
+cloudformation/
+scripts/
