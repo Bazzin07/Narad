@@ -106,7 +106,6 @@ async def _rebuild_faiss_from_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    global _scheduler
     logger.info("🚀 Narad v2 starting up...")
 
     # Initialize database in the background so the health endpoint is immediately
@@ -115,41 +114,23 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(init_db())
     logger.info("✅ Database init started in background")
 
-    # Always initialize FAISS in-memory index (RDS doesn't have pgvector extension)
+    # Initialize FAISS in-memory index (lightweight, no model loading)
     embedding_service._ensure_faiss_index()
-    embedding_service.load_index()
     faiss_count = embedding_service._faiss_index.ntotal if embedding_service._faiss_index else 0
-    logger.info(f"✅ Embedding service ready (FAISS: {faiss_count} vectors)")
-
-    # Background task: rebuild FAISS from existing DB articles
-    asyncio.create_task(_rebuild_faiss_from_db())
-    logger.info("✅ FAISS rebuild from DB started in background")
+    logger.info(f"✅ Embedding service ready (FAISS fallback: {faiss_count} vectors)")
 
     logger.info(f"✅ LLM backend: {settings.llm_backend}")
     logger.info(f"✅ Storage backend: {settings.storage_backend}")
     logger.info(f"✅ Score threshold: {settings.score_threshold}")
 
-    # v2: Start background ingestion scheduler
-    try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        _scheduler = AsyncIOScheduler()
-        _scheduler.add_job(_scheduled_ingestion, "interval", minutes=30, id="ingestion_cron")
-        _scheduler.start()
-        logger.info("✅ Background ingestion scheduler started (every 30 min)")
-    except ImportError:
-        logger.warning("⚠️ APScheduler not installed — background ingestion disabled. Install with: pip install apscheduler")
-    except Exception as e:
-        logger.warning(f"⚠️ Scheduler failed to start: {e}")
+    # NOTE: Background ingestion scheduler and FAISS rebuild disabled for App Runner
+    # (2GB memory limit). Ingestion can be triggered manually via POST /api/news/ingest.
+    logger.info("ℹ️ Background scheduler disabled (use manual /api/news/ingest)")
 
     yield
 
     # Shutdown
-    if _scheduler:
-        _scheduler.shutdown(wait=False)
-        logger.info("✅ Scheduler stopped")
     logger.info("🛑 Narad shutting down...")
-    embedding_service.save_index()
-    logger.info("✅ FAISS index saved")
 
 
 # ── FastAPI App ───────────────────────────────────────────────────────────────

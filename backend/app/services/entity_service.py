@@ -43,18 +43,8 @@ COMPREHEND_TYPE_MAP = {
 
 
 def _get_comprehend():
-    """Lazy-load Amazon Comprehend client."""
-    global _comprehend_client
-    if _comprehend_client is None:
-        try:
-            import boto3
-            from app.config import settings
-            _comprehend_client = boto3.client("comprehend", region_name=settings.aws_region)
-            logger.info("Amazon Comprehend client initialized")
-        except Exception as e:
-            logger.warning(f"Comprehend not available: {e}")
-            _comprehend_client = False  # Sentinel to avoid repeated attempts
-    return _comprehend_client if _comprehend_client else None
+    """Comprehend disabled to save free-tier quota. spaCy handles all NER."""
+    return None
 
 
 def extract_entities_comprehend(text: str, language: str = "en") -> List[Tuple[str, str, str]]:
