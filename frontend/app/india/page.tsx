@@ -82,14 +82,14 @@ const ALL_STATES = Object.keys(STATE_DISPLAY);
 
 // ── News Channels ───────────────────────────────────────────────────
 const NEWS_CHANNELS = [
-  { id: "ndtv", name: "NDTV", embed: "https://www.youtube.com/embed/live_stream?channel=UCZFMm1mMw0F81Z37aaEzTUA&autoplay=0&mute=1" },
-  { id: "timesnow", name: "TIMES NOW", embed: "https://www.youtube.com/embed/live_stream?channel=UC6RJ7-PaXg6TIH2BzZfTV7w&autoplay=0&mute=1" },
-  { id: "indiatoday", name: "INDIA TODAY", embed: "https://www.youtube.com/embed/live_stream?channel=UCYPvAwZP8pZhSMW8qs7cVCw&autoplay=0&mute=1" },
-  { id: "republic", name: "REPUBLIC", embed: "https://www.youtube.com/embed/live_stream?channel=UCwqusr8YDwM-3mEYTDeJHzw&autoplay=0&mute=1" },
-  { id: "abpnews", name: "ABP", embed: "https://www.youtube.com/embed/live_stream?channel=UCRWFSbif-RFENbBrSiez1DA&autoplay=0&mute=1" },
-  { id: "news18", name: "NEWS18", embed: "https://www.youtube.com/embed/live_stream?channel=UCef1-8eOpJgud7szVPlZQAQ&autoplay=0&mute=1" },
-  { id: "wion", name: "WION", embed: "https://www.youtube.com/embed/live_stream?channel=UC_gUM8rL-Lrg6O3adPW9K1g&autoplay=0&mute=1" },
-  { id: "ddnews", name: "DD NEWS", embed: "https://www.youtube.com/embed/live_stream?channel=UCKwucPzHZ7zCUIf7If-Wo1g&autoplay=0&mute=1" },
+  { id: "ndtv", name: "NDTV", embed: "https://www.youtube.com/embed/XBQD5ihyGvU?autoplay=0&mute=1" },
+  { id: "timesnow", name: "TIMES NOW", embed: "https://www.youtube.com/embed/iUcd9sTd4oc?autoplay=0&mute=1" },
+  { id: "indiatoday", name: "INDIA TODAY", embed: "https://www.youtube.com/embed/IQmgoA-p3Wg?autoplay=0&mute=1" },
+  { id: "republic", name: "REPUBLIC", embed: "https://www.youtube.com/embed/N4If2zTIgKY?autoplay=0&mute=1" },
+  { id: "abpnews", name: "ABP", embed: "https://www.youtube.com/embed/k7f_HQ3f5AI?autoplay=0&mute=1" },
+  { id: "news18", name: "NEWS18", embed: "https://www.youtube.com/embed/_eUOyiuuPMg?autoplay=0&mute=1" },
+  { id: "wion", name: "WION", embed: "https://www.youtube.com/embed/N53Zb6I6GY4?autoplay=0&mute=1" },
+  { id: "ddnews", name: "DD NEWS", embed: "https://www.youtube.com/embed/2V9GXMEXOrg?autoplay=0&mute=1" },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────
