@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-
+import GlobalLoader from "@/components/GlobalLoader";
 export const metadata: Metadata = {
   title: "NARAD — Event Intelligence Observatory",
   description: "Discover hidden connections between global news events. A GenAI-powered intelligence platform.",
@@ -20,7 +20,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-white text-[#111111] antialiased">
-        {children}
+        <GlobalLoader>
+          {children}
+        </GlobalLoader>
       </body>
     </html>
   );
