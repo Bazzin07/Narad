@@ -82,14 +82,14 @@ const ALL_STATES = Object.keys(STATE_DISPLAY);
 
 // ── News Channels ───────────────────────────────────────────────────
 const NEWS_CHANNELS = [
-  { id: "ndtv", name: "NDTV", embed: "https://www.youtube.com/embed/CkgJ_PWLcPM?autoplay=0&mute=1" },
-  { id: "timesnow", name: "TIMES NOW", embed: "https://www.youtube.com/embed/-uLJfqSsX6M?autoplay=0&mute=1" },
-  { id: "indiatoday", name: "INDIA TODAY", embed: "https://www.youtube.com/embed/kZLaSDu4_Og?autoplay=0&mute=1" },
-  { id: "republic", name: "REPUBLIC", embed: "https://www.youtube.com/embed/8ZVRCUccRLw?autoplay=0&mute=1" },
-  { id: "abpnews", name: "ABP", embed: "https://www.youtube.com/embed/uu1hjwO1D7A?autoplay=0&mute=1" },
-  { id: "news18", name: "NEWS18", embed: "https://www.youtube.com/embed/TvAV58jMUHo?autoplay=0&mute=1" },
-  { id: "wion", name: "WION", embed: "https://www.youtube.com/embed/hOO35m5eGeg?autoplay=0&mute=1" },
-  { id: "ddnews", name: "DD NEWS", embed: "https://www.youtube.com/embed/Et1rjUJFqrs?autoplay=0&mute=1" },
+  { id: "ndtv", name: "NDTV", embed: "https://www.youtube.com/embed/live_stream?channel=UCZFMm1mMw0F81Z37aaEzTUA&autoplay=0&mute=1" },
+  { id: "timesnow", name: "TIMES NOW", embed: "https://www.youtube.com/embed/live_stream?channel=UC6RJ7-PaXg6TIH2BzZfTV7w&autoplay=0&mute=1" },
+  { id: "indiatoday", name: "INDIA TODAY", embed: "https://www.youtube.com/embed/live_stream?channel=UCYPvAwZP8pZhSMW8qs7cVCw&autoplay=0&mute=1" },
+  { id: "republic", name: "REPUBLIC", embed: "https://www.youtube.com/embed/live_stream?channel=UCwqusr8YDwM-3mEYTDeJHzw&autoplay=0&mute=1" },
+  { id: "abpnews", name: "ABP", embed: "https://www.youtube.com/embed/live_stream?channel=UCRWFSbif-RFENbBrSiez1DA&autoplay=0&mute=1" },
+  { id: "news18", name: "NEWS18", embed: "https://www.youtube.com/embed/live_stream?channel=UCef1-8eOpJgud7szVPlZQAQ&autoplay=0&mute=1" },
+  { id: "wion", name: "WION", embed: "https://www.youtube.com/embed/live_stream?channel=UC_gUM8rL-Lrg6O3adPW9K1g&autoplay=0&mute=1" },
+  { id: "ddnews", name: "DD NEWS", embed: "https://www.youtube.com/embed/live_stream?channel=UCKwucPzHZ7zCUIf7If-Wo1g&autoplay=0&mute=1" },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────

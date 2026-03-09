@@ -72,8 +72,16 @@ INDIA_ENTITIES = {
     "bollywood", "priyanka chopra", "shah rukh khan", "salman khan",
     "aamir khan", "amitabh bachchan", "deepika padukone", "alia bhatt",
     "ranveer singh", "katrina kaif", "akshay kumar",
+    # Business / Corporates
+    "nita ambani", "mukesh ambani", "ambani", "reliance", "jio",
+    "tata", "ratan tata", "tcs", "mahindra", "anand mahindra",
+    "adani", "gautam adani", "infosys", "sudha murty", "narayana murthy",
+    "wipro", "azim premji", "gita gopinath",
     # Indian rivers / geography
     "ganga", "yamuna", "godavari", "brahmaputra", "narmada",
+    # State / Local Government
+    "dmrc", "bmc", "bbmp", "ghmc", "vidhan sabha", "panchayat", "sarpanch",
+    "chief minister", "cm", "prime minister", "pm", "mla", "mp", "high court",
     # Hindi keywords
     "bharat", "sarkaar", "pradhan mantri", "mukhya mantri",
     "chunav", "vikas", "garib", "kisan", "arthvyavastha",

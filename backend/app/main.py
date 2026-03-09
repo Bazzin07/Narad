@@ -123,13 +123,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"✅ Storage backend: {settings.storage_backend}")
     logger.info(f"✅ Score threshold: {settings.score_threshold}")
 
-    # NOTE: Background ingestion scheduler and FAISS rebuild disabled for App Runner
-    # (2GB memory limit). Ingestion can be triggered manually via POST /api/news/ingest.
-    logger.info("ℹ️ Background scheduler disabled (use manual /api/news/ingest)")
+    # Start the background ingestion scheduler (30-min interval)
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    global _scheduler
+    _scheduler = AsyncIOScheduler()
+    _scheduler.add_job(_scheduled_ingestion, 'interval', minutes=30)
+    _scheduler.start()
+    logger.info("✅ Background ingestion scheduled (30m interval)")
 
     yield
 
     # Shutdown
+    if _scheduler:
+        _scheduler.shutdown()
     logger.info("🛑 Narad shutting down...")
 
 
