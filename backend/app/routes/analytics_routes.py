@@ -262,6 +262,7 @@ async def get_source_bias_analysis(
     # Find similar articles from different sources — FAISS preferred, SQL fallback
     articles = []
     similarity_map = {}
+    similar = []  # Initialize here so SQL fallback path can safely reference it
 
     emb = orchestrator.embedding.get_embedding_by_id(article_id) if orchestrator.embedding else None
     if emb is not None:
@@ -297,7 +298,7 @@ async def get_source_bias_analysis(
     # Analyze each source's framing
     comparisons = []
     for a in selected:
-        sim_score = next((s for aid, s in similar if aid == a.id), 0)
+        sim_score = next((s for aid, s in similar if aid == a.id), similarity_map.get(a.id, 0.7))
         sent = getattr(a, "sentiment_score", None) or compute_sentiment(a.title, a.content)
 
         # Get entities for emphasis analysis
