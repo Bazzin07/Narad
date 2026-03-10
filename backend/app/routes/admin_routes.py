@@ -45,3 +45,25 @@ async def trigger_fix_scopes(
             
     background_tasks.add_task(run_fix)
     return {"status": "Scope fix triggered in background"}
+
+@router.post("/cron/ingest")
+async def trigger_cron_ingestion(db: AsyncSession = Depends(get_db)):
+    """
+    Synchronous ingestion endpoint intended for AWS EventBridge / Cron.
+    Does NOT use BackgroundTasks. Keeps the HTTP socket open so that AWS
+    App Runner container CPU does not pause/freeze during the ingestion run.
+    Note: Ensure App Runner Request Timeout is configured > 120s if processing is heavy.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("Cron ingestion starting synchronously...")
+    try:
+        from app.main import orchestrator
+        result = await orchestrator.run_full_pipeline(db)
+        logger.info(f"Cron ingestion completed successfully: {result}")
+        return {"status": "success", "data": result}
+    except Exception as e:
+        logger.error(f"Cron ingestion failed synchronously: {e}", exc_info=True)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
