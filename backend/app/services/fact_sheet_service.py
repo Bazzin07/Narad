@@ -142,7 +142,7 @@ class FactSheetService:
         aggregation = self._aggregate_facts(seed, scored_articles, entity_map)
 
         # 7. Generate narrative (LLM or rule-based)
-        narrative = await self._generate_fact_narrative(seed, scored_articles, aggregation)
+        narrative = await self._generate_fact_narrative(seed, scored_articles, aggregation, preferred_language)
 
         return {
             "seed_article": {
@@ -239,7 +239,7 @@ class FactSheetService:
         }
 
     async def _generate_fact_narrative(
-        self, seed: Article, scored: List[Dict], aggregation: Dict
+        self, seed: Article, scored: List[Dict], aggregation: Dict, preferred_language: str = "English"
     ) -> str:
         """Generate a consolidated fact sheet narrative."""
         sources = set([seed.source] + [s["article"].source for s in scored])

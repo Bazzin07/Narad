@@ -303,7 +303,8 @@ export default function ArticlePage({ params }: { params: Promise<{ id: string }
                     {/* Button row */}
                     <div className="flex items-center gap-3 flex-wrap">
                         <button
-                            onClick={async () => {
+                            onClick={async (e) => {
+                                e.currentTarget.style.background = "transparent";
                                 setAnalyzing(true);
                                 setAnalysisError("");
                                 try {
@@ -351,7 +352,8 @@ export default function ArticlePage({ params }: { params: Promise<{ id: string }
                         </button>
 
                         <button
-                            onClick={async () => {
+                            onClick={async (e) => {
+                                e.currentTarget.style.background = "transparent";
                                 setExploring(true);
                                 setExploreError("");
                                 try {
@@ -401,7 +403,8 @@ export default function ArticlePage({ params }: { params: Promise<{ id: string }
 
                         {/* Fact Sheet Button */}
                         <button
-                            onClick={async () => {
+                            onClick={async (e) => {
+                                e.currentTarget.style.background = "transparent";
                                 setLoadingFactSheet(true);
                                 setFactSheetError("");
                                 try {
@@ -635,7 +638,7 @@ export default function ArticlePage({ params }: { params: Promise<{ id: string }
                 </motion.div>
 
                 {/* ─── Event Intelligence Results ─── */}
-                {explore && explore.related_events.length > 0 && (
+                {explore && (
                     <motion.div
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
