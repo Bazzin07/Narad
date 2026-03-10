@@ -181,10 +181,17 @@ async def explore_connections(
         return cached
 
     try:
+        from sqlalchemy import select
+        from app.models.article import Article
+        
+        article = await db.scalar(select(Article).where(Article.id == article_id))
+        lang = article.language if article else "English"
+
         result = await asyncio.wait_for(
             event_intelligence_service.explore_connections(
                 seed_article_id=article_id,
                 db=db,
+                preferred_language=lang,
             ),
             timeout=15.0,
         )
@@ -229,10 +236,17 @@ async def get_fact_sheet(
         return cached
 
     try:
+        from sqlalchemy import select
+        from app.models.article import Article
+        
+        article = await db.scalar(select(Article).where(Article.id == article_id))
+        lang = article.language if article else "English"
+
         result = await asyncio.wait_for(
             fact_sheet_service.generate_fact_sheet(
                 article_id=article_id,
                 db=db,
+                preferred_language=lang,
             ),
             timeout=15.0,
         )

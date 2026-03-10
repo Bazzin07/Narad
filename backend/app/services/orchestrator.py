@@ -237,7 +237,8 @@ class Orchestrator:
 
         if validation.allowed:
             analysis = await self.llm.generate_deep_analysis(
-                article_dict, entities, cluster_info
+                article_dict, entities, cluster_info,
+                preferred_language=article.language or "English"
             )
             self.validation.track_call(session_id)
 

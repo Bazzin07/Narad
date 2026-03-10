@@ -46,6 +46,7 @@ class FactSheetService:
         db: AsyncSession,
         max_sources: int = 15,
         min_score: float = 0.35,
+        preferred_language: str = "English",
     ) -> Dict[str, Any]:
         """
         Generate a multi-source fact sheet for a given article.
@@ -272,7 +273,9 @@ Write a structured fact sheet with these sections:
 5. **Coverage Gap** — What's NOT being covered or what questions remain
 
 Keep it concise, factual, and reference which sources provide which information.
-Use hedged language for unconfirmed details."""
+Use hedged language for unconfirmed details.
+
+IMPORTANT: Generate the ENTIRE Fact Sheet in {preferred_language}."""
 
         # Try LLM
         if self.llm and hasattr(self.llm, '_invoke_fast'):
