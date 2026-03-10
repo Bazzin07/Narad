@@ -129,7 +129,7 @@ async def lifespan(app: FastAPI):
     _scheduler = AsyncIOScheduler()
     _scheduler.add_job(_scheduled_ingestion, 'interval', minutes=30)
     _scheduler.start()
-    logger.info("✅ Background ingestion scheduled (30m interval)")
+    logger.info("✅ Background ingestion scheduled (every 30 min)")
 
     yield
 
@@ -220,6 +220,7 @@ from app.routes.source_routes import router as source_router
 from app.routes.analytics_routes import router as analytics_router
 from app.routes.dashboard_routes import router as dashboard_router
 from app.routes.chat_routes import router as chat_router
+from app.routes.admin_routes import router as admin_router
 
 app.include_router(news_router)
 app.include_router(compare_router)
@@ -229,6 +230,7 @@ app.include_router(source_router)
 app.include_router(analytics_router)
 app.include_router(dashboard_router)
 app.include_router(chat_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")

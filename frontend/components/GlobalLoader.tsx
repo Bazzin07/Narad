@@ -2,27 +2,40 @@
 
 import React, { useEffect, useState, Suspense } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useFrontendContext } from "@/app/contexts/FrontendContext";
 
 function LoaderCore({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isTransitioning, setIsTransitioning] = useState(true);
+  const { isGlobalLoading, setGlobalLoading } = useFrontendContext();
+  const [minTimePassed, setMinTimePassed] = useState(false);
 
   useEffect(() => {
-    // Trigger splash screen on route change or initial load
-    setIsTransitioning(true);
+    // On route change, start loading sequence
+    setGlobalLoading(true);
+    setMinTimePassed(false);
     
-    // Minimum artificial loading time (2.5 seconds)
+    // Minimum 1.5s delay so the SVG animation isn't just a brief flicker
     const timer = setTimeout(() => {
-      setIsTransitioning(false);
-    }, 2500);
+      setMinTimePassed(true);
+    }, 1500);
 
-    return () => clearTimeout(timer);
-  }, [pathname, searchParams]);
+    // Failsafe: if page doesn't clear loading state within 5s (e.g. static server component), clear it
+    const failsafe = setTimeout(() => {
+      setGlobalLoading(false);
+    }, 5000);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(failsafe);
+    };
+  }, [pathname, searchParams, setGlobalLoading]);
+
+  const showLoader = isGlobalLoading || !minTimePassed;
 
   return (
     <>
-      {isTransitioning && (
+      {showLoader && (
         <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
           {/* Animated Connecting Graph SVG */}
           <div className="relative flex items-center justify-center mb-10 w-48 h-48">

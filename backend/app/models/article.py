@@ -82,7 +82,12 @@ class Article(Base):
     geographic_scope = Column(String(10), nullable=True, default="global")  # india, global, mixed
     state = Column(String(50), nullable=True)  # indian state: delhi, maharashtra, etc.
     sentiment_score = Column(Float, nullable=True)  # -1.0 (negative) to 1.0 (positive)
-    embedding = Column(Text, nullable=True)  # Serialized embedding (FAISS handles similarity search)
+    # Use pgvector Vector type when available (matches prod RDS schema), else Text fallback.
+    # CRITICAL: Must match the DB column type exactly or INSERT will fail with DatatypeMismatchError.
+    if PGVECTOR_AVAILABLE and Vector is not None:
+        embedding = Column(Vector(1024), nullable=True)
+    else:
+        embedding = Column(Text, nullable=True)  # local SQLite fallback
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

@@ -30,14 +30,15 @@ async def init_db():
     """Create all tables using raw SQL to avoid pgvector type introspection issues."""
     from sqlalchemy import text as sa_text
 
-    async with engine.begin() as conn:
-        # Try enabling pgvector extension (optional — FAISS fallback used if unavailable)
-        try:
+    # Try enabling pgvector extension (optional — FAISS fallback used if unavailable)
+    try:
+        async with engine.begin() as conn:
             await conn.execute(sa_text("CREATE EXTENSION IF NOT EXISTS vector"))
             logger.info("pgvector extension enabled")
-        except Exception as e:
-            logger.warning(f"pgvector extension not available: {e}. FAISS fallback will be used.")
+    except Exception as e:
+        logger.warning(f"pgvector extension not available: {e}. FAISS fallback will be used.")
 
+    async with engine.begin() as conn:
         # Create tables with explicit SQL — avoids SQLAlchemy introspecting `vector` type
         try:
             await conn.execute(sa_text("""

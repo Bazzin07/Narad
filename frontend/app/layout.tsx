@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import GlobalLoader from "@/components/GlobalLoader";
+import { FrontendProvider } from "@/app/contexts/FrontendContext";
+
 export const metadata: Metadata = {
   title: "NARAD — Event Intelligence Observatory",
   description: "Discover hidden connections between global news events. A GenAI-powered intelligence platform.",
@@ -20,9 +22,11 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-white text-[#111111] antialiased">
-        <GlobalLoader>
-          {children}
-        </GlobalLoader>
+        <FrontendProvider>
+          <GlobalLoader>
+            {children}
+          </GlobalLoader>
+        </FrontendProvider>
       </body>
     </html>
   );

@@ -34,6 +34,7 @@ import {
   type AskNaradSource,
 } from "../lib/api";
 import Navbar from "../components/Navbar";
+import { useFrontendContext } from "../contexts/FrontendContext";
 
 // ── Working GeoJSON for India states ────────────────────────────────
 const INDIA_GEO =
@@ -226,6 +227,7 @@ function TypingEffect({ text, speed = 8 }: { text: string; speed?: number }) {
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════════
 export default function IndiaIntelligence() {
+  const { setGlobalLoading } = useFrontendContext();
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<StateHeatmapEntry[]>([]);
   const [briefing, setBriefing] = useState<AIBriefingResponse | null>(null);
@@ -274,14 +276,19 @@ export default function IndiaIntelligence() {
   }, [heatmapData]);
 
   useEffect(() => {
-    getDashboardHeatmap().then(d => setHeatmapData(d.states)).catch(() => {});
-    getMarketData().then(setMarkets).catch(() => {});
-    getStateData().then(setStateData).catch(() => {});
-    getRegionalAnalytics(null).then(setRegionalAnalytics).catch(() => {});
-    getDomainRadar(null).then(setDomainRadar).catch(() => {});
-    getNarrativeConflicts(null).then(setConflicts).catch(() => {});
+    Promise.allSettled([
+      getDashboardHeatmap().then(d => setHeatmapData(d.states)),
+      getMarketData().then(setMarkets),
+      getStateData().then(setStateData),
+      getRegionalAnalytics(null).then(setRegionalAnalytics),
+      getDomainRadar(null).then(setDomainRadar),
+      getNarrativeConflicts(null).then(setConflicts),
+    ]).finally(() => {
+      setGlobalLoading(false);
+    });
+
     try { const s = localStorage.getItem("narad_channels"); if (s) setEnabledChannels(JSON.parse(s)); } catch { /* */ }
-  }, []);
+  }, [setGlobalLoading]);
 
   // Scroll Ask Narad chat to bottom on new answers
   useEffect(() => { askEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [askHistory]);

@@ -254,11 +254,13 @@ class EmbeddingService:
 
     async def process_article(self, article: Article, db: AsyncSession) -> Optional[np.ndarray]:
         """Generate embedding for an article and store it appropriately."""
+        import asyncio
         try:
             full_text = f"{article.title}. {article.content}"
-            embedding = self.generate_embedding(full_text)
+            # Offload synchronous CPU-heavy or network-blocking embedding inference to a thread
+            embedding = await asyncio.to_thread(self.generate_embedding, full_text)
 
-            # Always add to FAISS in-memory index (RDS doesn't have pgvector extension)
+            # Always add to FAISS in-memory index
             self._add_to_faiss(article.id, embedding)
 
             article.processed = max(article.processed, 2)

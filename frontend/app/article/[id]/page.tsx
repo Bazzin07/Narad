@@ -301,146 +301,156 @@ export default function ArticlePage({ params }: { params: Promise<{ id: string }
                     className="max-w-5xl mb-12"
                 >
                     {/* Button row */}
-                    {!analysis && !analyzing && !explore && !exploring && (
-                        <div className="flex items-center gap-3 flex-wrap">
-                            <button
-                                onClick={async () => {
-                                    setAnalyzing(true);
-                                    setAnalysisError("");
-                                    try {
-                                        const result = await analyzeArticle(resolvedParams.id);
-                                        setAnalysis(result.analysis);
-                                    } catch (err) {
-                                        console.error(err);
-                                        setAnalysisError("Analysis unavailable. Try again later.");
-                                    }
-                                    setAnalyzing(false);
-                                }}
-                                className="cursor-pointer transition-all duration-200"
-                                style={{
-                                    fontFamily: "var(--font-mono)",
-                                    fontSize: "0.7rem",
-                                    letterSpacing: "0.08em",
-                                    textTransform: "uppercase",
-                                    color: "var(--accent)",
-                                    background: "transparent",
-                                    border: "1px solid var(--accent)",
-                                    padding: "10px 24px",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "10px",
-                                }}
-                                onMouseEnter={(e) => {
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                            onClick={async () => {
+                                setAnalyzing(true);
+                                setAnalysisError("");
+                                try {
+                                    const result = await analyzeArticle(resolvedParams.id);
+                                    setAnalysis(result.analysis);
+                                } catch (err) {
+                                    console.error(err);
+                                    setAnalysisError("Analysis unavailable. Try again later.");
+                                }
+                                setAnalyzing(false);
+                            }}
+                            disabled={analyzing || !!analysis}
+                            className="cursor-pointer transition-all duration-200"
+                            style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "0.7rem",
+                                letterSpacing: "0.08em",
+                                textTransform: "uppercase",
+                                color: analysis ? "#628DD3" : "var(--accent)",
+                                background: "transparent",
+                                border: `1px solid ${analysis ? "#628DD3" : "var(--accent)"}`,
+                                padding: "10px 24px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "10px",
+                                opacity: analyzing ? 0.6 : 1,
+                            }}
+                            onMouseEnter={(e) => {
+                                if (!analysis) {
                                     e.currentTarget.style.background = "var(--accent)";
                                     e.currentTarget.style.color = "#fff";
-                                }}
-                                onMouseLeave={(e) => {
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (!analysis) {
                                     e.currentTarget.style.background = "transparent";
                                     e.currentTarget.style.color = "var(--accent)";
-                                }}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-                                </svg>
-                                Deep Analysis
-                            </button>
+                                }
+                            }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                            </svg>
+                            {analyzing ? "Generating..." : analysis ? "✓ Analysis Ready" : "Deep Analysis"}
+                        </button>
 
-                            <button
-                                onClick={async () => {
-                                    setExploring(true);
-                                    setExploreError("");
-                                    try {
-                                        const result = await exploreConnections(resolvedParams.id);
-                                        setExplore(result);
-                                    } catch (err) {
-                                        console.error(err);
-                                        setExploreError("Connection analysis unavailable. Try again later.");
-                                    }
-                                    setExploring(false);
-                                }}
-                                className="cursor-pointer transition-all duration-200"
-                                style={{
-                                    fontFamily: "var(--font-mono)",
-                                    fontSize: "0.7rem",
-                                    letterSpacing: "0.08em",
-                                    textTransform: "uppercase",
-                                    color: "var(--accent)",
-                                    background: "transparent",
-                                    border: "1px solid var(--accent)",
-                                    padding: "10px 24px",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "10px",
-                                }}
-                                onMouseEnter={(e) => {
+                        <button
+                            onClick={async () => {
+                                setExploring(true);
+                                setExploreError("");
+                                try {
+                                    const result = await exploreConnections(resolvedParams.id);
+                                    setExplore(result);
+                                } catch (err) {
+                                    console.error(err);
+                                    setExploreError("Connection analysis unavailable. Try again later.");
+                                }
+                                setExploring(false);
+                            }}
+                            disabled={exploring || !!explore}
+                            className="cursor-pointer transition-all duration-200"
+                            style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "0.7rem",
+                                letterSpacing: "0.08em",
+                                textTransform: "uppercase",
+                                color: explore ? "#628DD3" : "var(--accent)",
+                                background: "transparent",
+                                border: `1px solid ${explore ? "#628DD3" : "var(--accent)"}`,
+                                padding: "10px 24px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "10px",
+                                opacity: exploring ? 0.6 : 1,
+                            }}
+                            onMouseEnter={(e) => {
+                                if (!explore) {
                                     e.currentTarget.style.background = "var(--accent)";
                                     e.currentTarget.style.color = "#fff";
-                                }}
-                                onMouseLeave={(e) => {
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (!explore) {
                                     e.currentTarget.style.background = "transparent";
                                     e.currentTarget.style.color = "var(--accent)";
-                                }}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
-                                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                                </svg>
-                                Explore Connections
-                            </button>
+                                }
+                            }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                            </svg>
+                            {exploring ? "Scanning..." : explore ? "✓ Connections Ready" : "Explore Connections"}
+                        </button>
 
-                            {/* Fact Sheet Button */}
-                            <button
-                                onClick={async () => {
-                                    setLoadingFactSheet(true);
-                                    setFactSheetError("");
-                                    try {
-                                        const result = await getFactSheet(resolvedParams.id);
-                                        setFactSheet(result);
-                                    } catch (err) {
-                                        setFactSheetError(err instanceof Error ? err.message : "Failed to generate fact sheet");
-                                    } finally {
-                                        setLoadingFactSheet(false);
-                                    }
-                                }}
-                                disabled={loadingFactSheet || !!factSheet}
-                                className="cursor-pointer transition-all duration-200"
-                                style={{
-                                    fontFamily: "var(--font-mono)",
-                                    fontSize: "0.7rem",
-                                    letterSpacing: "0.08em",
-                                    textTransform: "uppercase",
-                                    color: factSheet ? "#628DD3" : "var(--accent)",
-                                    background: "transparent",
-                                    border: `1px solid ${factSheet ? "#628DD3" : "var(--accent)"}`,
-                                    padding: "10px 24px",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "10px",
-                                    opacity: loadingFactSheet ? 0.6 : 1,
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!factSheet) {
-                                        e.currentTarget.style.background = "var(--accent)";
-                                        e.currentTarget.style.color = "#fff";
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!factSheet) {
-                                        e.currentTarget.style.background = "transparent";
-                                        e.currentTarget.style.color = "var(--accent)";
-                                    }
-                                }}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                    <line x1="16" y1="13" x2="8" y2="13" />
-                                    <line x1="16" y1="17" x2="8" y2="17" />
-                                </svg>
-                                {loadingFactSheet ? "Generating..." : factSheet ? "✓ Fact Sheet Ready" : "Fact Sheet"}
-                            </button>
-                        </div>
-                    )}
+                        {/* Fact Sheet Button */}
+                        <button
+                            onClick={async () => {
+                                setLoadingFactSheet(true);
+                                setFactSheetError("");
+                                try {
+                                    const result = await getFactSheet(resolvedParams.id);
+                                    setFactSheet(result);
+                                } catch (err) {
+                                    setFactSheetError(err instanceof Error ? err.message : "Failed to generate fact sheet");
+                                } finally {
+                                    setLoadingFactSheet(false);
+                                }
+                            }}
+                            disabled={loadingFactSheet || !!factSheet}
+                            className="cursor-pointer transition-all duration-200"
+                            style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "0.7rem",
+                                letterSpacing: "0.08em",
+                                textTransform: "uppercase",
+                                color: factSheet ? "#628DD3" : "var(--accent)",
+                                background: "transparent",
+                                border: `1px solid ${factSheet ? "#628DD3" : "var(--accent)"}`,
+                                padding: "10px 24px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "10px",
+                                opacity: loadingFactSheet ? 0.6 : 1,
+                            }}
+                            onMouseEnter={(e) => {
+                                if (!factSheet) {
+                                    e.currentTarget.style.background = "var(--accent)";
+                                    e.currentTarget.style.color = "#fff";
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (!factSheet) {
+                                    e.currentTarget.style.background = "transparent";
+                                    e.currentTarget.style.color = "var(--accent)";
+                                }
+                            }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                            </svg>
+                            {loadingFactSheet ? "Generating..." : factSheet ? "✓ Fact Sheet Ready" : "Fact Sheet"}
+                        </button>
+                    </div>
 
                     {/* Fact Sheet Error */}
                     {factSheetError && (

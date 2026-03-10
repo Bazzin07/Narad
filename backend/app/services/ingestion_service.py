@@ -158,8 +158,30 @@ def _extract_full_content(html: str, url: str) -> str:
         return ""
 
 
-async def _scrape_article_content(url: str, timeout: float = 8.0) -> str:
-    """Fetch and extract full article content from a URL."""
+def _extract_meta_image(html: str, base_url: str) -> Optional[str]:
+    """Extract og:image or twitter:image from HTML using regex to avoid bs4 overhead."""
+    import re
+    from urllib.parse import urljoin
+    
+    img_url = None
+    # Match <meta property="og:image" content="...">
+    m1 = re.search(r'<meta[^>]+(?:property|name)=[\'"](?:og:image|twitter:image)[\'"][^>]+content=[\'"]([^\'"]+)[\'"]', html, re.IGNORECASE)
+    if m1: 
+        img_url = m1.group(1)
+    else:
+        # Match <meta content="..." property="og:image">
+        m2 = re.search(r'<meta[^>]+content=[\'"]([^\'"]+)[\'"][^>]+(?:property|name)=[\'"](?:og:image|twitter:image)[\'"]', html, re.IGNORECASE)
+        if m2: 
+            img_url = m2.group(1)
+            
+    if img_url:
+        return urljoin(base_url, img_url)
+    return None
+
+
+async def _scrape_article_data(url: str, timeout: float = 8.0, needs_content: bool = True, needs_image: bool = False) -> Dict[str, Optional[str]]:
+    """Fetch and extract full article content and/or meta image from a URL."""
+    result = {"content": None, "image_url": None}
     try:
         async with httpx.AsyncClient(
             timeout=timeout,
@@ -169,13 +191,19 @@ async def _scrape_article_content(url: str, timeout: float = 8.0) -> str:
             response = await client.get(url)
             response.raise_for_status()
             html = response.text
-            # Run trafilatura in thread to not block async loop
-            loop = asyncio.get_event_loop()
-            full_text = await loop.run_in_executor(None, _extract_full_content, html, url)
-            return full_text
+            
+            if needs_image:
+                result["image_url"] = _extract_meta_image(html, url)
+                
+            if needs_content:
+                loop = asyncio.get_event_loop()
+                full_text = await loop.run_in_executor(None, _extract_full_content, html, url)
+                result["content"] = full_text
+                
+            return result
     except Exception as e:
-        logger.debug(f"Failed to scrape {url}: {e}")
-        return ""
+        logger.debug(f"Failed to scrape data for {url}: {e}")
+        return result
 
 
 # ── Default Source Seeds ──────────────────────────────────────────────────────
@@ -483,13 +511,26 @@ class IngestionService:
         if await self.is_duplicate(url, content_hash, db):
             return None
 
-        # Attempt full content scraping if RSS content is too short
+        # Attempt full content scraping and/or missing image extraction
         content = article_data["content"]
-        if len(content) < 300 and url:
+        image_url = article_data.get("image_url")
+        
+        needs_content = len(content) < 300
+        needs_image = not image_url
+        
+        if (needs_content or needs_image) and url:
             try:
-                full_text = await _scrape_article_content(url, timeout=8.0)
-                if full_text and len(full_text) > len(content):
-                    content = _sanitize_content(full_text)
+                scraped = await _scrape_article_data(url, timeout=8.0, needs_content=needs_content, needs_image=needs_image)
+                
+                # Update Image
+                if needs_image and scraped.get("image_url"):
+                    article_data["image_url"] = scraped["image_url"]
+                    logger.debug(f"Scraped missing image for: {article_data['title'][:50]}")
+                    
+                # Update Content
+                ext_content = scraped.get("content")
+                if needs_content and ext_content and len(ext_content) > len(content):
+                    content = _sanitize_content(ext_content)
                     article_data["content"] = content
                     article_data["summary"] = content[:500] if len(content) > 500 else content
                     # Re-hash with full content
@@ -497,7 +538,7 @@ class IngestionService:
                     article_data["content_hash"] = content_hash
                     logger.debug(f"Scraped full content ({len(content)} chars) for: {article_data['title'][:50]}")
             except Exception as e:
-                logger.debug(f"Content scraping failed for {url}: {e}")
+                logger.debug(f"Scraping failed for {url}: {e}")
 
         # Generate storage key
         url_hash = hashlib.md5(url.encode()).hexdigest()
@@ -599,19 +640,22 @@ class IngestionService:
             logger.error(error_msg)
             errors.append(error_msg)
 
-        # Store articles
+        # Store articles — use per-article savepoints so one bad article
+        # cannot roll back the entire session and block all others.
         stored = 0
         skipped = 0
         for article_data in all_articles:
             try:
-                result = await self.store_article(article_data, db)
+                async with db.begin_nested():  # SAVEPOINT
+                    result = await self.store_article(article_data, db)
                 if result:
                     stored += 1
                 else:
                     skipped += 1
             except Exception as e:
-                logger.error(f"Failed to store article: {e}")
+                logger.error(f"Failed to store article '{article_data.get('title', '')[:50]}': {e}")
                 errors.append(str(e))
+                # Session is still valid after savepoint rollback — continue with next article
 
         await db.commit()
 

@@ -22,93 +22,6 @@ from app.models.article import Article, Entity, ArticleEntity
 
 logger = logging.getLogger(__name__)
 
-# ── Amazon Comprehend (AWS-native NER for EN/HI/UR) ───────────────────────────
-_comprehend_client = None
-
-# Languages supported by Amazon Comprehend (subset of Narad's 12)
-COMPREHEND_SUPPORTED = {"en", "hi", "ar", "ur"}  # ur maps to ar in Comprehend
-
-# Entity type mapping from Comprehend to spaCy-compatible types
-COMPREHEND_TYPE_MAP = {
-    "PERSON": "PERSON",
-    "ORGANIZATION": "ORG",
-    "LOCATION": "GPE",
-    "COMMERCIAL_ITEM": "ORG",
-    "EVENT": "EVENT",
-    "OTHER": "MISC",
-    "QUANTITY": None,
-    "DATE": None,
-    "TITLE": None,
-}
-
-
-def _get_comprehend():
-    """Comprehend disabled to save free-tier quota. spaCy handles all NER."""
-    return None
-
-
-def extract_entities_comprehend(text: str, language: str = "en") -> List[Tuple[str, str, str]]:
-    """
-    Extract named entities using Amazon Comprehend (AWS-native AI).
-    Returns [] if language unsupported, Comprehend unavailable, or an error occurs.
-    """
-    comprehend = _get_comprehend()
-    if not comprehend:
-        return []
-    lang_code = "ar" if language == "ur" else language
-    if lang_code not in {"en", "hi", "ar"}:
-        return []
-    try:
-        text_trimmed = text[:4800] if len(text.encode("utf-8")) > 4800 else text
-        response = comprehend.detect_entities(Text=text_trimmed, LanguageCode=lang_code)
-        entities = []
-        seen: Set[tuple] = set()
-        for ent in response.get("Entities", []):
-            mapped_type = COMPREHEND_TYPE_MAP.get(ent["Type"])
-            if not mapped_type or ent["Score"] < 0.70:
-                continue
-            text_val = ent["Text"].strip()
-            normalized = normalize_entity_text(text_val)
-            key = (normalized, mapped_type)
-            if key not in seen and len(text_val) >= 2:
-                entities.append((text_val, mapped_type, normalized))
-                seen.add(key)
-        logger.debug(f"Comprehend found {len(entities)} entities [{language}]")
-        return entities
-    except Exception as e:
-        logger.warning(f"Comprehend entity extraction failed: {e}")
-        return []
-
-
-def get_sentiment_comprehend(text: str, language: str = "en"):
-    """
-    Get sentiment score from Amazon Comprehend.
-    Returns float in -1.0..1.0 range, or None if unavailable / language unsupported.
-    """
-    comprehend = _get_comprehend()
-    if not comprehend:
-        return None
-    lang_code = "ar" if language == "ur" else language
-    if lang_code not in {"en", "hi", "ar"}:
-        return None
-    try:
-        text_trimmed = text[:4800] if len(text.encode("utf-8")) > 4800 else text
-        response = comprehend.detect_sentiment(Text=text_trimmed, LanguageCode=lang_code)
-        sentiment = response["Sentiment"]
-        scores = response["SentimentScore"]
-        if sentiment == "POSITIVE":
-            return scores["Positive"]
-        elif sentiment == "NEGATIVE":
-            return -scores["Negative"]
-        elif sentiment == "MIXED":
-            return scores["Positive"] - scores["Negative"]
-        else:
-            return 0.0
-    except Exception as e:
-        logger.warning(f"Comprehend sentiment failed: {e}")
-        return None
-
-
 # ── Lazy-load spaCy models ────────────────────────────────────────────────────
 _nlp_en = None
 _nlp_xx = None
@@ -207,8 +120,9 @@ class EntityService:
         Extract entities from text using language-appropriate model.
 
         Strategy:
-          - EN / HI / UR: Amazon Comprehend (AWS-native AI) + spaCy merge
-          - All other Indian languages: spaCy dual-pass NER only
+          - Fast dual-pass spaCy NER on local ML models
+          - English uses en_core_web_sm
+          - Other languages use multilingual xx_ent_wiki_sm
 
         Returns list of (entity_text, entity_type, normalized_text) tuples.
         """
@@ -217,15 +131,9 @@ class EntityService:
 
         entities: Set[Tuple[str, str, str]] = set()
 
-        # ── AWS Comprehend layer (EN / HI / UR) ──────────────────────────────
-        if language in COMPREHEND_SUPPORTED:
-            comprehend_entities = extract_entities_comprehend(text, language)
-            for item in comprehend_entities:
-                entities.add(item)
-
         # ── spaCy layer ───────────────────────────────────────────────────────
         if language == "en":
-            # English: single pass with en model (Comprehend already ran, this fills gaps)
+            # English: single pass with en model
             nlp = _get_nlp_en()
             doc = nlp(text[:100_000])
             for ent in doc.ents:

@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import ClientShell from "../components/ClientShell";
 import ArticleCard from "../components/ArticleCard";
 import { getArticles, type ArticleSummary } from "../lib/api";
+import { useFrontendContext } from "../contexts/FrontendContext";
 
 const ARTICLES_PER_PAGE = 20;
 const POLL_INTERVAL_MS = 60000; // 60 seconds (slower for global)
 
 export default function GlobalNewsPage() {
+    const { setGlobalLoading } = useFrontendContext();
     const [language, setLanguage] = useState("en");
     const [articles, setArticles] = useState<ArticleSummary[]>([]);
     const [loading, setLoading] = useState(true);
@@ -43,7 +45,8 @@ export default function GlobalNewsPage() {
             );
         }
         setLoading(false);
-    }, [language]);
+        setGlobalLoading(false);
+    }, [language, setGlobalLoading]);
 
     useEffect(() => {
         fetchArticles();
